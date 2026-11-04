@@ -9,22 +9,24 @@ for (const f of ['core', 'profile', 'game']) vm.runInContext(fs.readFileSync(pat
 const SL = ctx.SL;
 
 const N = +process.argv[2] || 120;
+const twists = {}, used = {};
 let built = 0, salts = 0, maxSalt = 0, maxW = 0, fails = 0, events = {};
 const t0 = Date.now();
-for (const seed of ['ALPHA', 'BRAVO', 'C3PO7', 'DELTA', 'ECHO9']) {
+for (const diff of ['normal', 'hard', 'rage']) for (const seed of ['ALPHA', 'BRAVO', 'C3PO7', 'DELTA', 'ECHO9']) {
   const sheet = {}, prof = SL.Profile.blank();
   let last = [];
   for (let lv = 1; lv <= N; lv++) {
-    const pick = SL.Profile.choose(lv, sheet, prof, last, seed);
+    const pick = SL.Profile.choose(lv, sheet, prof, last, seed, diff);
     if (pick.intro) sheet[pick.intro] = { met: true };
     last = pick.cheats;
     if (new Set(pick.cheats).size !== pick.cheats.length) throw new Error('duplicate cheat ' + pick.cheats);
     let L;
-    try { L = SL.buildLevel(seed, lv, pick.cheats); } catch (e) { fails++; console.log('FAIL', e.message, pick.cheats); continue; }
+    try { L = SL.buildLevel(seed, lv, pick.cheats, diff); } catch (e) { fails++; console.log('FAIL', e.message, pick.cheats); continue; }
     built++; salts += L.salt; maxSalt = Math.max(maxSalt, L.salt); maxW = Math.max(maxW, L.w);
     // also every single cheat alone at this level
-    if (lv % 10 === 0) for (const id of SL.CHEAT_IDS) SL.buildLevel(seed + id, lv, [id]);
+    if (lv % 10 === 0) for (const id of SL.CHEAT_IDS) SL.buildLevel(seed + id, lv, [id], diff);
     const w = new SL.World(L, { bonks: 0, crumbleSurvive: 0, causes: {} });
+    twists[L.twist] = (twists[L.twist] || 0) + 1; for (const id of pick.cheats) used[id] = (used[id] || 0) + 1;
     const r = SL.rng(lv * 7 + 1);
     let inp = { left: false, right: true, jump: false, jumpPressed: false };
     for (let i = 0; i < 60 * 40; i++) {
@@ -41,4 +43,6 @@ for (const seed of ['ALPHA', 'BRAVO', 'C3PO7', 'DELTA', 'ECHO9']) {
 }
 console.log(`built ${built} levels, ${fails} failures, avg salt ${(salts / built).toFixed(2)}, max salt ${maxSalt}, max width ${maxW} tiles, ${Date.now() - t0}ms`);
 console.log('events', JSON.stringify(events));
+console.log('twists', JSON.stringify(twists));
+console.log('cheats', JSON.stringify(used));
 if (fails) process.exit(1);

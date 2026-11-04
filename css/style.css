@@ -39,6 +39,9 @@ body {
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 kbd {
@@ -314,7 +317,80 @@ kbd {
   .logo b, .logo .flip, .voice.talking .face svg, .voice.mood-glitch .face svg { animation: none; }
 }
 #s-sheet, #s-dossier { z-index: 20; }
-/* phones held upright: controls sit under the game instead of on top of it */
-@media (pointer: coarse) and (orientation: portrait) {
-  .touch { position: fixed; bottom: max(16px, env(safe-area-inset-bottom)); }
+
+
+/* ---------- difficulty ---------- */
+.diff-pick { margin-top: 16px; width: min(380px, 100%); }
+.seg { display: flex; background: rgba(28,18,38,0.55); border: 3px solid var(--ink); border-radius: 16px; padding: 4px; gap: 4px; }
+.seg button {
+  flex: 1; border: 0; border-radius: 11px; padding: 8px 0; background: transparent; color: var(--paper);
+  font-weight: 600; font-size: 16px; transition: background .15s, color .15s;
 }
+.seg button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.seg button[data-d="hard"][aria-pressed="true"] { background: var(--yellow); }
+.seg button[data-d="rage"][aria-pressed="true"] { background: var(--red); color: #fff; }
+.seg button:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
+.diff-blurb { margin: 8px 0 0; font-size: 14px; opacity: 0.9; text-shadow: 0 1px 0 var(--ink); min-height: 1.3em; }
+.chip.diff-hard { background: var(--yellow); }
+.chip.diff-rage { background: var(--red); color: #fff; }
+.chip.twist { background: var(--violet); color: #fff; }
+.chip.twist span { color: rgba(255,255,255,0.8); }
+
+/* ---------- touch devices ---------- */
+.touch-only { display: none; }
+body.touchy .touch-only { display: inline-flex; }
+body.touchy .touch-hide { display: none; }
+.touch { touch-action: none; user-select: none; -webkit-user-select: none; }
+.touch .t-jump { display: grid; place-items: center; gap: 0; }
+.touch .t-jump svg { width: 26px; height: 26px; margin-bottom: -6px; }
+.touch .t-jump span { font-size: 13px; }
+/* landscape phones: controls float in the corners over the game, see-through so the floor stays visible */
+body.touchy:not(.portrait) .touch { position: fixed; padding: 0 max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); z-index: 5; }
+body.touchy:not(.portrait) .touch button { opacity: 0.6; }
+body.touchy:not(.portrait) .touch button.down { opacity: 0.9; }
+body.touchy:not(.portrait) #stage { border-radius: 0; box-shadow: none; }
+/* phones held upright: the game sits at the top, big controls get the space below */
+body.touchy.portrait #app { place-items: start center; padding-top: max(10px, env(safe-area-inset-top)); }
+body.touchy.portrait .touch { position: fixed; padding: 0 18px max(26px, env(safe-area-inset-bottom)); z-index: 5; }
+body.touchy.portrait .touch button { width: 84px; height: 84px; border-radius: 26px; }
+body.touchy.portrait .touch button svg { width: 34px; height: 34px; }
+body.touchy.portrait .touch .t-jump { width: 112px; height: 112px; border-radius: 50%; }
+body.touchy.portrait #stage::after {
+  content: 'Turn your phone sideways for a bigger view'; position: absolute; left: 0; right: 0; top: 100%;
+  text-align: center; font-size: 12px; color: rgba(255,250,242,0.6); padding-top: 8px;
+}
+body.touchy.portrait #stage { overflow: visible; }
+body.touchy.portrait #cv { border-radius: 14px; }
+/* small screens: HUD and voice shrink so they cover less of the level */
+@media (max-height: 500px), (max-width: 640px) {
+  .hud { padding: 6px; gap: 4px; }
+  .hud-l, .hud-r { gap: 4px; }
+  .chip { padding: 1px 7px; border-width: 2px; box-shadow: 0 2px 0 var(--ink); border-radius: 9px; }
+  .chip b { font-size: 14px; }
+  .chip span, .chip.seed { display: none; }
+  .pill { padding: 3px 7px; border-width: 2px; box-shadow: 0 2px 0 var(--ink); font-size: 12px; }
+  .pill span { display: none; }
+  .voice { top: 36px; padding: 4px 10px 4px 4px; border-width: 2px; border-radius: 14px; gap: 6px; }
+  .face { width: 32px; height: 32px; }
+  .vname { font-size: 9px; }
+  .vbody p { font-size: 13px !important; }
+  .toasts { transform: scale(0.8); transform-origin: bottom right; }
+}
+/* short landscape screens: compact title */
+@media (max-height: 520px) {
+  .screen { place-items: start center; padding: 10px; }
+  .logo .w1 b { font-size: clamp(36px, 10vh, 64px); }
+  .logo .w2 b { font-size: clamp(42px, 12vh, 76px); }
+  .tag { margin: 2px 0 10px; font-size: 15px; }
+  .tag-sub { display: none; }
+  .title-wrap { width: min(760px, 100%); }
+  .title-wrap .menu { gap: 8px; }
+  .btn.big { font-size: 18px; padding: 9px 20px; }
+  .btn { padding: 7px 14px; font-size: 15px; }
+  .diff-pick { margin-top: 10px; }
+  .seg button { padding: 5px 0; font-size: 14px; }
+  .title-stats { margin-top: 8px !important; }
+  .panel { padding: 14px 14px 12px; }
+  .panel h2 { font-size: 24px; }
+}
+body.touchy .toasts { bottom: auto; top: 44px; }

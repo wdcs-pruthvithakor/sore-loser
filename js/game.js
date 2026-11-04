@@ -17,11 +17,16 @@ const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h 
 
 function World(L, history) {
   this.L = L;
+  this.P = Object.assign({}, P);
+  if (L.twist === 'ice') Object.assign(this.P, { accel: 900, fric: 260, turn: 1.0 });
+  if (L.twist === 'floaty') Object.assign(this.P, { grav: P.grav * 0.8, gravRelease: P.gravRelease * 0.8, gravFall: P.gravFall * 0.8, maxFall: 700 });
+  this.rage = L.diff === 'rage';
   this.has = {};
   for (const id of L.cheats) this.has[id] = true;
   this.history = history || { bonks: 0, crumbleSurvive: 0, causes: {} };
   this.history.tunnels = this.history.tunnels || 0;
   this.history.shakes = this.history.shakes || 0;
+  this.history.reveals = this.history.reveals || 0;
   this.events = [];
   this.stats = SL.Profile.blankStats();
   this.t = 0;
@@ -47,7 +52,9 @@ W.code = function (c, r) {
   if (c < 0 || c >= L.w) return TC.GROUND;
   if (r < 0 || r >= H) return TC.E;
   if (this.dropped && this.dropped.size) { const d = this.dropped.get(c); if (d !== undefined && r >= d) return TC.E; }
-  return L.tiles[r * L.w + c];
+  const v = L.tiles[r * L.w + c];
+  if (v === TC.INVIS) return this.shown && this.shown.has(r * L.w + c) ? TC.GROUND : TC.INVIS;
+  return v;
 };
 W.solid = function (c, r) { return SL.isSolid(this.code(c, r)); };
 W.rect = function () { return { x: this.p.x, y: this.p.y, w: PW, h: PH }; };
@@ -59,7 +66,7 @@ W.reset = function () {
     x: this.respawnAt.x, y: this.respawnAt.y, vx: 0, vy: 0, grounded: true, coy: 0, buf: 0, alive: true, deadT: 0,
     sq: 1, trapT: 0, bonkT: 0, fallPlatT: 0, groundPlat: null, lastPlat: null, groundCode: TC.GROUND, takeoffX: null, air: 0
   });
-  for (const pl of L.plats) { pl.shake = 0; pl.fallen = false; pl.fy = 0; pl.fvy = 0; pl.dx = 0; pl.y = pl.homeY; pl.dodged = false; pl.dodgeT = -1; }
+  for (const pl of L.plats) { pl.shake = 0; pl.fallen = false; pl.fy = 0; pl.fvy = 0; pl.dx = 0; pl.y = pl.homeY; pl.x = pl.baseX; pl.dodged = false; pl.dodgeT = -1; }
   this.door = { spot: 0, x: L.doorSpots[0].x, y: L.doorSpots[0].y, hopsLeft: L.hops, hop: null, scared: 0 };
   this.popped = new Map();
   this.bonks = [];
@@ -72,6 +79,10 @@ W.reset = function () {
   this.dropped = new Map(); this.still = { c: -1, t: 0, warned: false }; this.dropT = 0;
   this.trail = []; this.ghost = null; this.awakeT = -1; this.lifeT = 0;
   this.mimicPassed = L.mimics.map(() => false); this.chomp = null;
+  this.shown = new Set(); this.falseT = 0;
+  this.lunge = L.lungers.map(l => ({ x: l.c * T, y: l.row * T, moving: false, moved: 0, passed: false }));
+  this.wall = { on: false, x: -1e9 };
+  this.quakeT = 2.5;
   this.attempt++;
   this.platMove(0);
 };
@@ -82,13 +93,14 @@ W.platMove = function (dt) {
       const nx = pl.x0 + (pl.x1 - pl.x0) * (0.5 - 0.5 * Math.cos(pl.phase + this.t * pl.omega));
       pl.dx = nx - pl.x; pl.x = nx;
     }
-    if (pl.kind === 'shy' && pl.dodgeT >= 0) {
+    if ((pl.kind === 'shy' || pl.kind === 'slide') && pl.dodgeT >= 0) {
       pl.dodgeT += dt;
       const t = pl.dodgeT, D = 3.5 * T;
       const off = t < 0.14 ? D * t / 0.14 : t < 1.2 ? D : t < 1.6 ? D * (1 - (t - 1.2) / 0.4) : 0;
-      pl.y = pl.homeY + off;
-      if (t >= 1.6) pl.dodgeT = -1;
-    }
+      if (pl.kind === 'shy') pl.y = pl.homeY + off;
+      else { const nx = pl.baseX + off * 3 / 3.5; pl.dx = nx - pl.x; pl.x = nx; }
+      if (t >= 1.6) { pl.dodgeT = -1; pl.dx = 0; }
+    } else if (pl.kind === 'slide') pl.dx = 0;
     if (pl.shake > 0) {
       pl.shake -= dt;
       if (pl.shake <= 0) { pl.fallen = true; pl.fvy = 0; this.emit('platFall', { x: pl.x + pl.w / 2, y: pl.y }); }
@@ -123,8 +135,9 @@ W.markSeen = function (id) {
 // input: { left, right, jump, jumpPressed, down }
 W.update = function (dt, input) {
   if (this.won) return;
+  if (this.L.twist === 'fast') dt *= 1.2;
   this.t += dt;
-  const p = this.p, L = this.L;
+  const p = this.p, L = this.L, P = this.P;
   this.platMove(dt);
 
   if (!p.alive) {
@@ -142,6 +155,7 @@ W.update = function (dt, input) {
   // ----- horizontal (Wrong Way swaps the keys) -----
   let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (this.swapped) dir = -dir;
+  if (L.twist === 'mirror') dir = -dir;   // the screen is flipped, so keys follow the screen
   if (dir) {
     const a = (p.grounded ? P.accel : P.airAccel) * (Math.sign(p.vx) === -dir ? P.turn : 1);
     p.vx += dir * a * dt;
@@ -166,17 +180,17 @@ W.update = function (dt, input) {
     if (this.swapped) this.swapJumps++;
     // Shy Ledge: the first jump toward a ledge with eyes makes it duck
     for (const pl of L.plats) {
-      if (pl.kind !== 'shy' || pl.dodged || pl.fallen) continue;
+      if ((pl.kind !== 'shy' && pl.kind !== 'slide') || pl.dodged || pl.fallen) continue;
       const ahead = pl.x - (p.x + PW / 2);
       if (ahead > -8 && ahead < 7 * T && Math.abs(pl.homeY - (p.y + PH)) < 4 * T) {
         pl.dodged = true; pl.dodgeT = 0;
-        this.markSeen('shyLedge');
+        this.markSeen(pl.kind === 'shy' ? 'shyLedge' : 'runaway');
         this.emit('dodge', { x: pl.x + pl.w / 2, y: pl.y });
       }
     }
     if (p.lastPlat && p.lastPlat.shake > 0 && p.groundPlat === p.lastPlat) {
       this.history.crumbleSurvive = (this.history.crumbleSurvive || 0) + 1;
-      if (this.history.crumbleSurvive >= 2) this.discover('thirdTime');
+      if (this.history.crumbleSurvive >= 2) this.discover('rotten');
     }
   }
   if (input.down && p.grounded) this.emit('down');
@@ -226,6 +240,17 @@ W.update = function (dt, input) {
     }
   } else {
     const r = Math.floor(p.y / T);
+    if (this.has.invisBlock) {
+      for (let c = c0; c <= c1; c++) {
+        const k = r * L.w + c;
+        if (r >= 0 && c >= 0 && c < L.w && L.tiles[k] === TC.INVIS && !this.shown.has(k)) {
+          this.shown.add(k); this.history.reveals++;
+          p.vx *= 0.35;
+          this.markSeen('invisBlock');
+          this.emit('reveal', { x: c * T + T / 2, y: r * T + T });
+        }
+      }
+    }
     for (let c = c0; c <= c1; c++) if (this.solid(c, r)) { p.y = (r + 1) * T; p.vy = 0; this.emit('head'); break; }
   }
   p.groundPlat = landedPlat;
@@ -239,20 +264,23 @@ W.update = function (dt, input) {
         if (p.takeoffX < gq.x0 * T && p.x + PW / 2 >= gq.x1 * T && p.x + PW / 2 < gq.x1 * T + 3 * T && (this.history.bonks || 0) > 0) this.discover('headache');
       }
     }
+    // Invisible Block: clearing a gap whose block you did not touch, after one got you
+    if (p.takeoffX !== null && this.history.reveals > 0) {
+      for (const iv of L.invis) {
+        const k = iv.row * L.w + iv.c;
+        if (!this.shown.has(k) && p.takeoffX < iv.c * T && p.x >= (iv.c + iv.gap) * T - PW) this.discover('invisBlock');
+      }
+    }
     p.takeoffX = null;
   }
   if (landedPlat && landedPlat.kind === 'shy' && landedPlat.dodged && p.grounded && !wasGrounded) this.discover('shyLedge');
-  // Third Time Unlucky: every third distinct platform you land on falls
-  if (landedPlat && landedPlat !== p.lastPlat) {
-    p.lastPlat = landedPlat;
-    if (this.has.thirdTime) {
-      this.landCount++;
-      if (this.landCount % 3 === 0) {
-        landedPlat.shake = 0.45;
-        this.markSeen('thirdTime');
-        this.emit('crumble', { x: landedPlat.x + landedPlat.w / 2, y: landedPlat.y });
-      }
-    }
+  if (landedPlat && landedPlat.kind === 'slide' && landedPlat.dodged && p.grounded && !wasGrounded) this.discover('runaway');
+  if (landedPlat) p.lastPlat = landedPlat;
+  // Rotten Platforms: a random set gives way a quarter-second after you land
+  if (landedPlat && !wasGrounded && landedPlat.rotten && this.has.rotten && !landedPlat.shake && !landedPlat.fallen) {
+    landedPlat.shake = 0.28;
+    this.markSeen('rotten');
+    this.emit('crumble', { x: landedPlat.x + landedPlat.w / 2, y: landedPlat.y });
   }
   if (!p.grounded) p.air += dt; else p.air = 0;
   p.sq += (1 - p.sq) * Math.min(1, dt * 12);
@@ -274,6 +302,7 @@ W.hazards = function (dt) {
   const c0 = Math.floor(p.x / T) - 1, c1 = Math.floor((p.x + PW) / T) + 1;
   const r0 = Math.max(0, Math.floor(p.y / T) - 1), r1 = Math.min(H - 1, Math.floor((p.y + PH) / T) + 1);
   if (p.trapT > 0) p.trapT -= dt;
+  if (this.falseT > 0) this.falseT -= dt;
   if (p.bonkT > 0) p.bonkT -= dt;
   for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
     const code = this.code(c, r);
@@ -281,7 +310,52 @@ W.hazards = function (dt) {
       return this.die(p.trapT > 0 ? 'shouting' : 'spike');
     }
     if (code === TC.SPIKED && overlap(pr, { x: c * T + 6, y: r * T, w: T - 12, h: 16 })) return this.die('ceilSpike');
-    if (code === TC.FALSE && overlap(pr, { x: c * T, y: r * T, w: T, h: T })) p.trapT = 2.5;
+    if (code === TC.FALSE && overlap(pr, { x: c * T, y: r * T, w: T, h: T })) {
+      const inFork = L.forks.some(f => c * T >= f.trapX0 && c * T < f.trapX1);
+      if (inFork) p.trapT = 2.5; else { this.falseT = 2.5; this.markSeen('falseFloor'); }
+    }
+  }
+
+  // Lunging spikes: a lone spike charges when you come within three tiles
+  for (const lg of this.lunge) {
+    const pcx = p.x + PW / 2, feet = p.y + PH;
+    if (!lg.moving && lg.moved === 0 && lg.x + T / 2 - pcx > 0 && lg.x + T / 2 - pcx < 3 * T + 8 && Math.abs(feet - (lg.y + T)) < 2 * T) {
+      lg.moving = true; this.markSeen('lunger'); this.emit('lunge', { x: lg.x + T / 2, y: lg.y + T });
+    }
+    if (lg.moving) {
+      const step = 520 * dt;
+      const nx = lg.x - step, c = Math.floor((nx + 4) / T), row = Math.floor(lg.y / T);
+      if (lg.moved > 6 * T || !SL.isSolid(this.code(c, row + 1)) || SL.isSolid(this.code(c, row))) lg.moving = false;
+      else { lg.x = nx; lg.moved += step; }
+    }
+    if (overlap(pr, { x: lg.x + 6, y: lg.y + 13, w: T - 12, h: T - 13 })) return this.die('lunger');
+    if (lg.moved > 0 && !lg.passed && pcx > lg.x + T + 4) { lg.passed = true; this.discover('lunger'); }
+  }
+
+  // Spike wall: follows at about half your speed once you leave the start
+  if (this.has.spikeWall) {
+    const wl = this.wall;
+    if (!wl.on && p.x > this.respawnAt.x + 2 * T) { wl.on = true; wl.x = this.respawnAt.x - 8 * T; this.markSeen('spikeWall'); this.emit('wallWake'); }
+    if (wl.on) {
+      wl.x = Math.min(wl.x + [100, 110, 120, 130, 140][L.gt] * dt, (L.w - 4) * T);
+      if (p.x < wl.x + 4) return this.die('spikeWall');
+    }
+  }
+
+  // Earthquake twist: the world jolts you every few seconds
+  if (L.twist === 'shaky') {
+    this.quakeT -= dt;
+    if (this.quakeT <= 0) { this.quakeT = 2.2 + Math.random() * 1.6; p.vx += (Math.random() < 0.5 ? -1 : 1) * 160; this.emit('quake'); }
+  }
+
+  // False Floor cracked: airborne over a false tile after one has dropped you
+  if (!p.grounded && this.has.falseFloor && this.history.causes && this.history.causes.falseFloor) {
+    const c = Math.floor((p.x + PW / 2) / T);
+    for (let r = Math.floor((p.y + PH) / T); r < Math.floor((p.y + PH) / T) + 3 && r < H; r++) {
+      const code = this.code(c, r);
+      if (code === TC.FALSE && !L.forks.some(f => c * T >= f.trapX0 && c * T < f.trapX1)) { this.discover('falseFloor'); break; }
+      if (SL.isSolid(code)) break;
+    }
   }
 
   // Sawblades
@@ -337,12 +411,12 @@ W.hazards = function (dt) {
     if (p.grounded && !safe && Math.abs(p.vx) < 30) {
       if (st.c !== c) { st.c = c; st.t = 0; st.warned = false; }
       st.t += dt;
+      const limit = this.rage ? 1.2 : 1.5;
       if (st.t > 0.8 && !st.warned) {
         st.warned = true; this.history.shakes++;
-        this.markSeen('impatient');
-        this.emit('shake', { x: c * T + T / 2, y: p.y + PH });
+        if (!this.rage) { this.markSeen('impatient'); this.emit('shake', { x: c * T + T / 2, y: p.y + PH }); }
       }
-      if (st.t > 1.5) {
+      if (st.t > limit) {
         const r = Math.floor((p.y + PH + 2) / T);
         for (let cc = Math.floor(p.x / T); cc <= Math.floor((p.x + PW - 1) / T); cc++) {
           if (cc >= 8) { this.dropped.set(cc, r); this.emit('floorDrop', { x: cc * T + T / 2, y: r * T }); }
@@ -351,7 +425,7 @@ W.hazards = function (dt) {
         p.grounded = false;
       }
     } else if (st.c >= 0) {
-      if (st.warned && st.t <= 1.5 && this.history.shakes >= 2 && p.alive) this.discover('impatient');
+      if (st.warned && st.t <= 1.5 && this.history.shakes >= 2 && p.alive && !this.rage) this.discover('impatient');
       st.c = -1; st.t = 0; st.warned = false;
     }
   }
@@ -418,10 +492,12 @@ W.hazards = function (dt) {
     const cx = (p.x + PW / 2) / T;
     let cause = 'pit';
     if (p.trapT > 0) cause = 'shouting';
+    else if (this.falseT > 0) cause = 'falseFloor';
     else if (this.dropT > 0) cause = 'impatient';
     else if (L.bridges.some(b => cx >= b.x0 - 1 && cx <= b.x1 + 1)) cause = 'secretFloor';
     else if (p.bonkT > 0) cause = 'headache';
-    else if (p.lastPlat && p.lastPlat.fallen) cause = 'thirdTime';
+    else if (p.lastPlat && p.lastPlat.fallen) cause = 'rotten';
+    else if (p.lastPlat && (p.lastPlat.kind === 'slide' || p.lastPlat.kind === 'shy') && p.lastPlat.dodged) cause = p.lastPlat.kind === 'slide' ? 'runaway' : 'shyLedge';
     this.die(cause);
   }
 };
@@ -444,6 +520,7 @@ W.cheatChecks = function (dt, input) {
     if (overlap(pr, dr)) {
       if (!p.grounded && this.fled > 0) this.discover('coldFeet');
       if (this.has.copycat && this.ghost) this.discover('copycat');
+      if (this.has.spikeWall && this.wall.on && p.x - this.wall.x < SL.VIEW_W) this.discover('spikeWall');
       this.won = true;
       this.emit('win', { airborne: !p.grounded });
       return;
@@ -499,16 +576,6 @@ W.cheatChecks = function (dt, input) {
       if (st.read && f.lie && st.route === f.safe) this.discover('shouting');
     }
   });
-
-  // ----- Paper Spikes -----
-  for (const cpt of L.carpets) if (Math.abs(pcx / T - cpt.x0) < 8) this.markSeen('paperSpikes');
-  let onPaper = false;
-  if (p.grounded) {
-    const r = Math.floor((p.y + PH - 1) / T);
-    for (let c = Math.floor(p.x / T); c <= Math.floor((p.x + PW - 1) / T); c++) if (this.code(c, r) === TC.PAPER) onPaper = true;
-  }
-  this.paperT = onPaper ? this.paperT + dt : 0;
-  if (this.paperT > 0.2) this.discover('paperSpikes');
 
   // ----- Secret Floor -----
   for (const b of L.bridges) if (Math.abs(pcx / T - b.x0) < 8) this.markSeen('secretFloor');

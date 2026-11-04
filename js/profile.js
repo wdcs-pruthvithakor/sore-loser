@@ -34,21 +34,25 @@ const Profile = SL.Profile = {
       gullible: (p.signFollow + 1) / (p.signFollow + p.signDefy + 2),
       flagLove: (p.cpTouches + 1) / (p.cpLevels + 2),
       stubborn: clamp01(dpl / 8),
-      spikey: ((c.spike || 0) + (c.ceilSpike || 0) + (c.pinholes || 0) + 1) / (p.deaths + 4),
-      falls: ((c.pit || 0) + (c.secretFloor || 0) + (c.thirdTime || 0) + 1) / (p.deaths + 4),
+      spikey: ((c.spike || 0) + (c.ceilSpike || 0) + (c.pinholes || 0) + (c.lunger || 0) + (c.saw || 0) + 1) / (p.deaths + 4),
+      falls: ((c.pit || 0) + (c.secretFloor || 0) + (c.rotten || 0) + (c.falseFloor || 0) + (c.runaway || 0) + 1) / (p.deaths + 4),
       n: { jps, idlePct: Math.round(idleFrac * 100), trustPct: Math.round(100 * (p.signFollow + 1) / (p.signFollow + p.signDefy + 2)), dpl }
     };
   },
 
   // Which traits push which cheats, and what the game says about it.
   DRIVERS: {
-    thirdTime: { trait: 'jumpy', k: 2.5, say: n => `You jump ${n.jps.toFixed(1)} times a second. The platforms have been counting.` },
+    rotten: { trait: 'jumpy', k: 2.5, say: n => `You jump ${n.jps.toFixed(1)} times a second. I let some platforms rot.` },
+    runaway: { trait: 'jumpy', k: 2.0, say: () => 'You leap before you look. The floor started leaping too.' },
+    invisBlock: { trait: 'jumpy', k: 2.0, say: () => 'You always jump from the very edge. I put something there.' },
     headache: { trait: 'jumpy', k: 2.0, say: () => 'You jump at every edge. I put something above them.' },
     pinholes: { trait: 'caution', k: 2.5, say: n => `You stand still ${n.idlePct}% of the time. The floor has been waiting too.` },
     coldFeet: { trait: 'caution', k: 1.5, say: () => 'You take your time. So does the exit.' },
     shouting: { trait: 'gullible', k: 3.0, say: n => `You believed ${n.trustPct}% of my signs. I wrote you more.` },
     backwardsFlag: { trait: 'flagLove', k: 2.5, say: () => 'You love checkpoints. I made one just for you.' },
-    paperSpikes: { trait: 'spikey', k: 3.0, say: () => 'Spikes keep getting you. Now you will respect every one of them.' },
+    lunger: { trait: 'spikey', k: 3.0, say: () => 'Spikes keep getting you. So now they come to you.' },
+    falseFloor: { trait: 'falls', k: 2.5, say: () => 'You fall a lot. I painted some extra floor for you.' },
+    spikeWall: { trait: 'caution', k: 2.0, say: () => 'You take your time. Something behind you does not.' },
     secretFloor: { trait: 'falls', k: 3.0, say: () => 'You fall in a lot of pits. Here is one you cannot jump.' },
     mimic: { trait: 'gullible', k: 2.0, say: () => 'You trust anything that looks like an exit. Noted.' },
     ceilingTeeth: { trait: 'caution', k: 2.5, say: () => 'You stop to think. The ceiling likes thinkers.' },
@@ -60,10 +64,10 @@ const Profile = SL.Profile = {
 
   // The Cheat Director: picks this level's cheats. New cheats are introduced one per level,
   // the rest are weighted by how you play, so the game targets your habits, not your skill.
-  choose(level, sheet, p, lastCheats, runSeed) {
+  choose(level, sheet, p, lastCheats, runSeed, diff) {
     const r = SL.rng(SL.hashStr(runSeed + ':director:' + level));
     if (level === 1) return { cheats: ['coldFeet'], reasons: [], intro: 'coldFeet' };
-    const count = SL.cheatCount(level, r);
+    const count = SL.cheatCount(level, r, diff);
     const picks = [];
     let intro = null;
     const fresh = SL.INTRO_ORDER.filter(id => !(sheet[id] && sheet[id].met));

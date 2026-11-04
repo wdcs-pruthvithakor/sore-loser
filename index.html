@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Sore Loser</title>
 <meta name="description" content="A cute little platformer that cheats. It moves the exit, lies on its signs and fakes its spikes, but every cheat follows a rule. Learn the rules, then beat it.">
 <meta name="theme-color" content="#1c1226">
 <link rel="preload" href="fonts/Fredoka-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=6">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='24' rx='7' fill='%23ffcb3d' stroke='%233b2a40' stroke-width='2.5'/%3E%3Ccircle cx='11' cy='15' r='2.5' fill='%233b2a40'/%3E%3Cpath d='M18 13l5 2-5 2' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3Cpath d='M10 21q6 4 12-1' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -19,10 +21,13 @@
       <div class="hud-l">
         <div class="chip"><span>Level</span><b id="h-level">1</b></div>
         <div class="chip"><span>Deaths</span><b id="h-deaths">0</b></div>
-        <div class="chip ghost"><span>Seed</span><b id="h-seed">-----</b></div>
+        <div class="chip diff-normal"><b id="h-diff">Normal</b></div>
+        <div class="chip twist" id="h-twist-chip" hidden><span>Twist</span><b id="h-twist">Ice</b></div>
+        <div class="chip ghost seed"><span>Seed</span><b id="h-seed">-----</b></div>
       </div>
       <div class="hud-r">
-        <button type="button" class="pill" id="h-sheet" title="Cheat Sheet (C)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 2h9l3 3v13H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 8h6M7 11h6M7 14h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Cheat Sheet</span><i id="h-sheet-n">0/14</i></button>
+        <button type="button" class="pill" id="h-sheet" title="Cheat Sheet (C)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 2h9l3 3v13H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 8h6M7 11h6M7 14h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Cheat Sheet</span><i id="h-sheet-n">0/18</i></button>
+        <button type="button" class="pill icon touch-only" id="h-restart" title="Restart level (R)" aria-label="Restart level"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10a5.5 5.5 0 1 1-1.8-4.1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M14.5 2.5v4h-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button type="button" class="pill icon" id="h-pause" title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="4" width="3.5" height="12" rx="1.2" fill="currentColor"/><rect x="11.5" y="4" width="3.5" height="12" rx="1.2" fill="currentColor"/></svg></button>
       </div>
     </div>
@@ -51,7 +56,7 @@
         <button type="button" data-k="left" aria-label="Left"><svg viewBox="0 0 20 20"><path d="M13 4l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button type="button" data-k="right" aria-label="Right"><svg viewBox="0 0 20 20"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
-      <button type="button" data-k="jump" class="t-jump" aria-label="Jump">JUMP</button>
+      <button type="button" data-k="jump" class="t-jump" aria-label="Jump"><svg viewBox="0 0 20 20"><path d="M4 13l6-6 6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>JUMP</span></button>
     </div>
   </div>
 
@@ -66,13 +71,21 @@
       <div class="menu">
         <button type="button" class="btn primary big" id="t-play">Play</button>
         <div class="menu-row">
-          <button type="button" class="btn" id="t-sheet">Cheat Sheet <i id="t-sheet-n">0/14</i></button>
+          <button type="button" class="btn" id="t-sheet">Cheat Sheet <i id="t-sheet-n">0/18</i></button>
           <button type="button" class="btn" id="t-dossier">Your Dossier</button>
         </div>
         <button type="button" class="btn ghost small" id="t-new">New run</button>
       </div>
+      <div class="diff-pick" role="group" aria-label="Difficulty">
+        <div class="seg" id="t-diff">
+          <button type="button" data-d="normal" aria-pressed="true">Normal</button>
+          <button type="button" data-d="hard" aria-pressed="false">Hard</button>
+          <button type="button" data-d="rage" aria-pressed="false">Rage</button>
+        </div>
+        <p id="t-diff-blurb" class="diff-blurb">Every trap has a tell. Learn them.</p>
+      </div>
       <div class="confirm" id="t-confirm" hidden>
-        <p>Start again from level 1 with a new seed? Your Cheat Sheet and Dossier stay.</p>
+        <p id="t-confirm-msg">Start again from level 1 with a new seed? Your Cheat Sheet and Dossier stay.</p>
         <div class="menu-row"><button type="button" class="btn primary" id="t-confirm-yes">New run</button><button type="button" class="btn" id="t-confirm-no">Keep going</button></div>
       </div>
       <dl class="title-stats">
@@ -80,7 +93,7 @@
         <div><dt>Deaths</dt><dd id="t-deaths">0</dd></div>
         <div><dt>Seed</dt><dd id="t-seed">-----</dd></div>
       </dl>
-      <p class="keys"><kbd>←</kbd><kbd>→</kbd> move &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>R</kbd> restart &nbsp; <kbd>C</kbd> cheat sheet &nbsp; <kbd>Esc</kbd> pause</p>
+      <p class="keys touch-hide"><kbd>←</kbd><kbd>→</kbd> move &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>R</kbd> restart &nbsp; <kbd>C</kbd> cheat sheet &nbsp; <kbd>Esc</kbd> pause</p>
       <button type="button" class="sound-btn" id="t-sound" aria-pressed="true">Sound on</button>
     </div>
   </section>
@@ -95,7 +108,7 @@
         </div>
         <button type="button" class="x" data-close aria-label="Close">×</button>
       </header>
-      <div class="progress"><div class="bar"><i id="sheet-bar"></i></div><span id="sheet-count">0 of 14 cracked</span></div>
+      <div class="progress"><div class="bar"><i id="sheet-bar"></i></div><span id="sheet-count">0 of 18 cracked</span></div>
       <div class="cards" id="sheet-cards"></div>
       <p class="panel-foot">Spot a cheat to learn what it does. Beat it on purpose to learn its rule.</p>
     </div>
@@ -171,12 +184,12 @@
   </section>
 </div>
 
-<script src="js/core.js?v=3"></script>
-<script src="js/profile.js?v=3"></script>
-<script src="js/game.js?v=3"></script>
-<script src="js/voice.js?v=3"></script>
-<script src="js/audio.js?v=3"></script>
-<script src="js/render.js?v=3"></script>
-<script src="js/main.js?v=3"></script>
+<script src="js/core.js?v=6"></script>
+<script src="js/profile.js?v=6"></script>
+<script src="js/game.js?v=6"></script>
+<script src="js/voice.js?v=6"></script>
+<script src="js/audio.js?v=6"></script>
+<script src="js/render.js?v=6"></script>
+<script src="js/main.js?v=6"></script>
 </body>
 </html>

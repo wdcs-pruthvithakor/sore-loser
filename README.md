@@ -23,14 +23,20 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
 - **Level generator** (`js/core.js`): builds each level left to right from segments that stay inside the
   player's jump range, then a validator checks there is a route to every spot the exit can flee to.
   Level `n` of a run is always the same for the same seed.
-- **Cheats** (14): Cold Feet, Paper Spikes, Third Time Unlucky, Pinholes, Mimic, Shouting Signs, Ceiling Teeth,
-  Headache Block, Shy Ledge, Secret Floor, Wrong Way, Backwards Flag, Impatient Floor, Copycat.
-  Rules are in `SL.CHEATS`. Tells get subtler as levels rise.
-- **Hazards**: spike-bed pits, sawblades, hanging-spike ceilings that only a short hop gets under,
-  1-wide pillars, and from level 31 five-tile gaps that need a jump right at the edge.
-  Pinholes and cracked tiles are also hidden in ordinary floor.
-- **Difficulty**: level 1 one cheat, 2-5 two, 6-15 two or three, 16-30 three, 31-50 three or four,
-  51+ four or five. New cheats are introduced one per level. Respawn is instant.
+- **Cheats** (18): Cold Feet, False Floor, Rotten Platforms, Pinholes, Mimic, Invisible Block, Shouting Signs,
+  Ceiling Teeth, Runaway Floor, Headache Block, Lunging Spike, Shy Ledge, Secret Floor, Wrong Way, Impatient Floor,
+  Backwards Flag, Copycat, Spike Wall. Rules are in `SL.CHEATS`.
+- **Difficulty modes** (`SL.DIFFS`): Normal (tells fade as levels rise), Hard (faint tells, +1 cheat, layouts one
+  tier meaner), Rage (no tells at all, +2 cheats, layouts two tiers meaner, signs drop their punctuation).
+- **Twists** (`SL.TWISTS`): from level 6 a level may get ice, lights out, low gravity, fast forward, earthquake or
+  (late) a mirrored screen.
+- **Hazards**: spike-bed pits, sawblades, hanging-spike ceilings and corridors that need a short hop, single-block
+  stairs, 1-wide pillars, and 5-tile gaps that need an edge jump. Pinholes, cracks, false floors, invisible blocks
+  and lunging spikes are also hidden in ordinary terrain.
+- **Difficulty curve**: level 1 one cheat, 2-5 two, 6-15 two or three, 16-30 three, 31-50 three or four,
+  51+ four or five (plus the mode bonus). New cheats are introduced one per level. Respawn is instant.
+- **Mobile**: multi-touch controls (slide a finger between buttons), a zoomed-in view when held upright, corner
+  controls in landscape, fullscreen and landscape lock on Play where the browser allows. `?touch=1` forces touch UI.
 - **Behaviour tracking, no AI** (`js/profile.js`): counts jumps, standing still, sign trust, checkpoint use and
   death causes. The Cheat Director weights cheats by those habits. The Dossier screen shows what it sees.
 - **Cheat Sheet**: a cheat is "spotted" when it triggers on you and "cracked" when you beat it on purpose.

@@ -2,7 +2,9 @@
 (function (G) {
 'use strict';
 const SL = G.SL;
-const T = SL.TILE, H = SL.ROWS, TC = SL.TC, VW = SL.VIEW_W, VH = SL.VIEW_H;
+const T = SL.TILE, H = SL.ROWS, TC = SL.TC, VH = SL.VIEW_H;
+// View width in world pixels. Phones held upright get a narrower, zoomed-in view.
+let VW = SL.VIEW_W;
 
 // One palette per tier: bright morning to glitchy night.
 const PAL = [
@@ -25,6 +27,8 @@ function Renderer(cv) {
 SL.Renderer = Renderer;
 const R = Renderer.prototype;
 
+R.setViewW = function (w) { VW = w; this.viewW = w; };
+R.viewW = SL.VIEW_W;
 R.resize = function (cssW, cssH) {
   const dpr = Math.min(2, G.devicePixelRatio || 1);
   this.k = (cssW / VW) * dpr;
@@ -32,6 +36,14 @@ R.resize = function (cssW, cssH) {
   this.cv.height = Math.round(VH * this.k);
   this.cv.style.width = cssW + 'px';
   this.cv.style.height = cssH + 'px';
+};
+
+// How visible a tell is: by tier on Normal, always faint on Hard, gone on Rage.
+R.tell = function (arr) {
+  const L = this.w.L;
+  if (L.diff === 'rage') return 0;
+  if (L.diff === 'hard') return arr[arr.length - 1] * 0.75;
+  return arr[L.tier];
 };
 
 R.setWorld = function (w) {
@@ -77,6 +89,10 @@ R.event = function (e) {
     case 'tooth': this.parts.push({ x: e.x, y: e.y + 2, vx: 0, vy: 30, life: 0.3, max: 0.3, color: pal.dirtD, size: 3, kind: 'dot', g: 300 }); break;
     case 'toothLand': this.burst(e.x, e.y, 6, '#eef2fb', 120, 0.3); break;
     case 'wake': this.glitch = 0.2; break;
+    case 'reveal': this.shake = 0.18; this.burst(e.x, e.y, 10, '#ffffff', 160, 0.4, 'star'); break;
+    case 'lunge': this.dust(e.x, e.y, 8); break;
+    case 'wallWake': this.glitch = 0.25; break;
+    case 'quake': this.shake = 0.45; break;
   }
 };
 
@@ -90,12 +106,14 @@ R.draw = function (dt, opts) {
   // camera
   if (opts.camX !== undefined) this.cam = opts.camX;
   else {
-    const target = Math.max(0, Math.min(L.w * T - VW, p.x + p.face * 70 - VW * 0.42));
+    const target = Math.max(0, Math.min(L.w * T - VW, p.x + p.face * 70 - VW * (VW < 700 ? 0.3 : 0.42)));
     this.cam += (target - this.cam) * Math.min(1, dt * 6);
   }
   let sx = 0, sy = 0;
   if (this.shake > 0) { this.shake -= dt; sx = (Math.random() - 0.5) * 8 * this.shake / 0.3; sy = (Math.random() - 0.5) * 8 * this.shake / 0.3; }
-  ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
+  if (L.twist === 'shaky') { sx += (Math.random() - 0.5) * 1.6; sy += (Math.random() - 0.5) * 1.6; }
+  if (L.twist === 'mirror') ctx.setTransform(-this.k, 0, 0, this.k, this.cv.width, 0);
+  else ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
 
   this.drawSky(ctx, pal, tier);
   ctx.save();
@@ -107,14 +125,23 @@ R.draw = function (dt, opts) {
   this.drawCheckpoint(ctx, w);
   w.L.mimics.forEach((m, i) => { if (m.x > this.cam - 60 && m.x < this.cam + VW + 60) this.drawMimic(ctx, w, m, i); });
   for (const th of w.teeth) this.drawTooth(ctx, th);
+  for (const lg of w.lunge) if (lg.x > this.cam - 40 && lg.x < this.cam + VW + 40) this.drawLunger(ctx, lg);
   for (const s of L.signs) if (s.x > this.cam - 60 && s.x < this.cam + VW + 60) this.drawSign(ctx, s);
   this.drawDoor(ctx, w);
   for (const b of w.bonks) this.drawBonk(ctx, b);
   if (w.ghost && p.alive && !opts.hidePlayer) this.drawGhost(ctx, w);
   if (p.alive && !opts.hidePlayer) this.drawPlayer(ctx, w);
   this.drawParts(ctx, dt);
+  if (w.wall.on) this.drawWall(ctx, w);
   for (const s of L.signs) if (s.near && p.alive) this.drawBubble(ctx, s);
   ctx.restore();
+  if (L.twist === 'dark') {
+    const px = (p.x + SL.PW / 2 - this.cam), py = p.y + SL.PH / 2;
+    const g = ctx.createRadialGradient(px, py, 40, px, py, 190);
+    g.addColorStop(0, 'rgba(8,4,14,0)'); g.addColorStop(1, 'rgba(8,4,14,0.97)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+  }
+  ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
 
   // post: tier gloom + glitches
   if (tier >= 3) {
@@ -175,6 +202,8 @@ R.hills = function (ctx, par, base, amp, col, freq) {
 R.drawTiles = function (ctx, w, c0, c1) {
   const L = w.L, pal = this.pal, tier = L.tier, t = this.time;
   const code = (c, r) => w.code(c, r);
+  // a spike buried under a false floor counts as dirt, so the trap draws no outline
+  const solidLook = (c, r) => { const k = code(c, r); return SL.looksSolid(k) || (k === TC.SPIKE && code(c, r - 1) === TC.FALSE); };
   for (let c = c0; c <= c1; c++) for (let r = 0; r < H; r++) {
     const k = code(c, r);
     const x = c * T, y = r * T;
@@ -188,9 +217,9 @@ R.drawTiles = function (ctx, w, c0, c1) {
       if (h1 > 0.65) ctx.fillRect(x + 20 - h1 * 8, y + 22, 3, 3);
       // side shading against open air
       ctx.fillStyle = pal.dirtD;
-      if (!SL.looksSolid(code(c - 1, r)) && c > 0) ctx.fillRect(x, y, 3, T);
-      if (!SL.looksSolid(code(c + 1, r)) && c < L.w - 1) ctx.fillRect(x + T - 3, y, 3, T);
-      if (!SL.looksSolid(code(c, r + 1)) && r < H - 1) ctx.fillRect(x, y + T - 4, T, 4);
+      if (!solidLook(c - 1, r) && c > 0) ctx.fillRect(x, y, 3, T);
+      if (!solidLook(c + 1, r) && c < L.w - 1) ctx.fillRect(x + T - 3, y, 3, T);
+      if (!solidLook(c, r + 1) && r < H - 1) ctx.fillRect(x, y + T - 4, T, 4);
       if (topOpen) {
         ctx.fillStyle = pal.grassD; ctx.fillRect(x, y, T, 11);
         ctx.fillStyle = pal.grass; ctx.fillRect(x, y, T, 8);
@@ -201,9 +230,9 @@ R.drawTiles = function (ctx, w, c0, c1) {
       }
       if (k === TC.HOLE) {
         const popped = w.popped.get(r * L.w + c);
-        const a = [1, 0.85, 0.7, 0.6, 0.5][tier];
+        const a = this.tell([1, 0.85, 0.7, 0.6, 0.5]);
         ctx.fillStyle = `rgba(40,20,40,${a})`;
-        for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(x + 8 + i * 8, y + 4, 2.4, 1.6, 0, 0, Math.PI * 2); ctx.fill(); }
+        if (a > 0) for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(x + 8 + i * 8, y + 4, 2.4, 1.6, 0, 0, Math.PI * 2); ctx.fill(); }
         if (popped !== undefined && popped > 0.02) {
           const hgt = Math.min(1, (popped - 0.02) / 0.08) * (popped > 1.1 ? Math.max(0, (1.3 - popped) / 0.2) : 1) * 24;
           this.spikeRow(ctx, x + 2, y, T - 4, hgt, 3, 1);
@@ -211,12 +240,22 @@ R.drawTiles = function (ctx, w, c0, c1) {
       }
       if (k === TC.SEAM) {
         // the tell: a dark seam and a hint of a tooth tip under the block
-        const a = [0.85, 0.7, 0.55, 0.45, 0.36][tier];
+        const a = this.tell([0.85, 0.7, 0.55, 0.45, 0.36]);
         ctx.fillStyle = `rgba(40,20,40,${a})`;
         ctx.fillRect(x + 3, y + T - 7, T - 6, 2);
         ctx.beginPath(); ctx.moveTo(x + T / 2 - 4, y + T); ctx.lineTo(x + T / 2, y + T + 3); ctx.lineTo(x + T / 2 + 4, y + T); ctx.fill();
       }
-      if (k === TC.SWIRL && topOpen) {
+      if (k === TC.FALSE && topOpen) {
+        // the tell: false floor has no grass blades and no specks
+        const a = L.forks.some(f => x >= f.trapX0 && x < f.trapX1) ? 0 : this.tell([0.9, 0.75, 0.6, 0.5, 0.4]);
+        if (a > 0) {
+          ctx.globalAlpha = a;
+          ctx.fillStyle = pal.dirt; ctx.fillRect(x, y + 11, T, 12);
+          ctx.fillStyle = pal.grass; ctx.fillRect(x, y, T, 11);
+          ctx.globalAlpha = 1;
+        }
+      }
+      if (k === TC.SWIRL && topOpen && this.tell([1, 1, 1, 1, 1]) > 0) {
         ctx.fillStyle = '#9d74ff'; ctx.fillRect(x, y, T, 11);
         ctx.fillStyle = '#c9a7ff'; ctx.fillRect(x, y, T, 8);
         ctx.strokeStyle = '#4b2a8a'; ctx.lineWidth = 2; ctx.beginPath();
@@ -225,13 +264,16 @@ R.drawTiles = function (ctx, w, c0, c1) {
         ctx.stroke();
       }
       if (k === TC.CRACK) {
-        ctx.strokeStyle = `rgba(50,25,40,${[0.9, 0.75, 0.6, 0.5, 0.42][tier]})`; ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(50,25,40,${this.tell([0.9, 0.75, 0.6, 0.5, 0.42])})`; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(x + 8, y); ctx.lineTo(x + 13, y + 9); ctx.lineTo(x + 9, y + 16); ctx.lineTo(x + 15, y + 26);
         ctx.moveTo(x + 13, y + 9); ctx.lineTo(x + 22, y + 13); ctx.lineTo(x + 26, y + 22); ctx.stroke();
       }
     } else if (k === TC.SPIKE && code(c, r - 1) === TC.FALSE) {
       // a spike buried under a false floor: drawn as dirt until you fall in
       ctx.fillStyle = pal.dirt; ctx.fillRect(x - 0.5, y - 0.5, T + 1, T + 1);
+    } else if (k === TC.INVIS) {
+      const a = this.tell([0.35, 0.28, 0.22, 0.16, 0.12]);
+      if (a > 0) { ctx.strokeStyle = `rgba(255,255,255,${a * (0.6 + 0.4 * Math.sin(t * 3 + c))})`; ctx.setLineDash([3, 5]); ctx.lineWidth = 2; ctx.strokeRect(x + 3, y + 3, T - 6, T - 6); ctx.setLineDash([]); }
     } else if (k === TC.SPIKED) {
       this.spikeRowDown(ctx, x + 2, y, T - 4, 17, 2);
     } else if (k === TC.SPIKE) {
@@ -243,7 +285,7 @@ R.drawTiles = function (ctx, w, c0, c1) {
       const ph = (t + off) % period;
       this.spikeRow(ctx, x + 2, y + T, T - 4, 18, 2, ph < 0.14 ? 0.18 : 1);
     } else if (k === TC.BRIDGE) {
-      const rate = [0.7, 0.5, 0.34, 0.24, 0.16][tier];
+      const rate = this.tell([0.7, 0.5, 0.34, 0.24, 0.16]);
       if (Math.random() < rate * 0.016) this.parts.push({ x: x + Math.random() * T, y: y + 2, vx: 0, vy: -18, life: 1.1, max: 1.1, color: '#ffffff', size: 5, kind: 'star', g: 0 });
       if (w.revealed.has(r * L.w + c)) {
         ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 2;
@@ -293,6 +335,48 @@ R.drawSaws = function (ctx, w) {
   }
 };
 
+R.drawSlide = function (ctx, pl, x, y) {
+  const pal = this.pal;
+  ctx.fillStyle = pal.dirt; ctx.fillRect(x - 0.5, y, pl.w + 1, VH - y);
+  ctx.fillStyle = pal.dot;
+  for (let i = 0; i < pl.w / T; i++) for (let j = 0; j < (VH - y) / T; j++) { const h1 = cellHash(i + 91, j); if (h1 > 0.3) ctx.fillRect(x + i * T + 6 + h1 * 14, y + j * T + 12 + h1 * 10, 4, 4); }
+  ctx.fillStyle = pal.grassD; ctx.fillRect(x, y, pl.w, 11);
+  ctx.fillStyle = pal.grass; ctx.fillRect(x, y, pl.w, 8);
+  ctx.beginPath(); for (let i = 0; i < pl.w / 11; i++) ctx.arc(x + 5 + i * 11, y + 9, 5, 0, Math.PI); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x, y + 1, pl.w, 2);
+  // the tell: hairline seams down both sides
+  const a = this.tell([0.8, 0.65, 0.5, 0.4, 0.32]);
+  if (a > 0) { ctx.fillStyle = `rgba(40,20,40,${a})`; ctx.fillRect(x, y + 11, 2, VH - y); ctx.fillRect(x + pl.w - 2, y + 11, 2, VH - y); }
+};
+
+R.drawLunger = function (ctx, lg) {
+  const a = this.tell([1, 0.8, 0.6, 0.5, 0.4]);
+  this.spikeRow(ctx, lg.x + 2, lg.y + T, T - 4, 18, 2, 1);
+  // the tell: a little red tip
+  if (a > 0) { ctx.fillStyle = `rgba(255,79,110,${a})`; ctx.beginPath(); ctx.arc(lg.x + 9.5, lg.y + T - 17, 2.2, 0, 7); ctx.arc(lg.x + 22.5, lg.y + T - 17, 2.2, 0, 7); ctx.fill(); }
+  if (lg.moving) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); for (let i = 0; i < 3; i++) { ctx.moveTo(lg.x + T + 4, lg.y + T - 4 - i * 6); ctx.lineTo(lg.x + T + 18, lg.y + T - 4 - i * 6); } ctx.stroke(); }
+};
+
+R.drawWall = function (ctx, w) {
+  const x = w.wall.x;
+  if (x < this.cam - 60) {
+    // off screen: a red glow on the left edge says it is coming
+    const g = ctx.createLinearGradient(this.cam, 0, this.cam + 60, 0);
+    g.addColorStop(0, 'rgba(255,40,80,0.35)'); g.addColorStop(1, 'rgba(255,40,80,0)');
+    ctx.fillStyle = g; ctx.fillRect(this.cam, 0, 60, VH);
+    return;
+  }
+  ctx.fillStyle = '#2a0f22'; ctx.fillRect(x - 400, 0, 400, VH);
+  ctx.fillStyle = '#4a1735'; ctx.fillRect(x - 14, 0, 14, VH);
+  for (let y = 0; y < VH; y += 24) {
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 18, y + 12); ctx.lineTo(x, y + 24); ctx.closePath();
+    ctx.fillStyle = '#eef2fb'; ctx.fill(); ctx.strokeStyle = '#6f7591'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  ctx.fillStyle = '#ff4f6e';
+  const ey = VH * 0.45 + Math.sin(this.time * 2) * 20;
+  ctx.beginPath(); ctx.arc(x - 30, ey, 7, 0, 7); ctx.arc(x - 30, ey + 26, 7, 0, 7); ctx.fill();
+};
+
 R.drawTooth = function (ctx, th) {
   ctx.beginPath(); ctx.moveTo(th.x - 8, th.y); ctx.lineTo(th.x, th.y + 20); ctx.lineTo(th.x + 8, th.y); ctx.closePath();
   ctx.fillStyle = '#eef2fb'; ctx.fill(); ctx.strokeStyle = '#6f7591'; ctx.lineWidth = 2; ctx.stroke();
@@ -313,16 +397,17 @@ R.drawMimic = function (ctx, w, m, i) {
   ctx.save(); ctx.translate(m.x, m.y);
   ctx.fillStyle = pal.doorD; rrect(ctx, -19, -50, 38, 50, 16); ctx.fill();
   ctx.fillStyle = pal.door; rrect(ctx, -15, -46, 30, 46, 13); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.25)'; rrect(ctx, 3, -42, 8, 20, 4); ctx.fill();
-  // the tell: handle on the left
-  ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(-9, -20, 2.6, 0, 7); ctx.fill();
+  // the tell: handle on the left (on Rage it copies the real door exactly)
+  const fake = w.L.diff === 'rage' ? 1 : -1;
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; rrect(ctx, fake > 0 ? -11 : 3, -42, 8, 20, 4); ctx.fill();
+  ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(9 * fake, -20, 2.6, 0, 7); ctx.fill();
   const p = w.p, dx = Math.max(-1, Math.min(1, (p.x + 10 - m.x) / 200));
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.ellipse(-6, -30, 4.5, 5, 0, 0, 7); ctx.ellipse(6, -30, 4.5, 5, 0, 0, 7); ctx.fill();
   ctx.fillStyle = pal.ink;
   ctx.beginPath(); ctx.arc(-6 + dx * 2, -30, 2.2, 0, 7); ctx.arc(6 + dx * 2, -30, 2.2, 0, 7); ctx.fill();
   ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.6; ctx.beginPath();
-  if (chomp || (near && p.alive)) {
+  if (chomp || (near && p.alive && w.L.diff !== 'rage')) {
     ctx.fillStyle = '#3b0f1f'; rrect(ctx, -11, -22, 22, 14, 5); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath();
     for (let k = 0; k < 4; k++) { ctx.moveTo(-10 + k * 5.5, -22); ctx.lineTo(-7.5 + k * 5.5, -17); ctx.lineTo(-5 + k * 5.5, -22); }
@@ -346,16 +431,23 @@ R.drawPlats = function (ctx, w) {
     let x = pl.x, y = pl.y + pl.fy;
     if (pl.shake > 0) x += (Math.random() - 0.5) * 4;
     if (y > VH + 40) continue;
+    if (pl.kind === 'slide') { this.drawSlide(ctx, pl, x, y); continue; }
     ctx.fillStyle = pal.platD; rrect(ctx, x, y + 3, pl.w, 13, 6); ctx.fill();
     ctx.fillStyle = pal.plat; rrect(ctx, x, y, pl.w, 12, 6); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fillRect(x + 6, y + 3, pl.w - 12, 2);
-    if (pl.kind === 'shy') {
+    if (pl.rotten && w.has.rotten) {
+      const a = this.tell([0.9, 0.75, 0.6, 0.5, 0.4]);
+      if (a > 0) { ctx.fillStyle = `rgba(110,150,60,${a})`; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x + 8 + i * (pl.w - 16) / 2, y + 6 + (i % 2) * 2, 2.6, 0, 7); ctx.fill(); } }
+    }
+    if (pl.kind === 'shy' && this.tell([1, 0.8, 0.6, 0.5, 0.4]) > 0) {
+      ctx.globalAlpha = this.tell([1, 0.8, 0.6, 0.5, 0.4]);
       const scared = pl.dodgeT >= 0;
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.ellipse(x + pl.w / 2 - 7, y + 6, 3.5, scared ? 4.5 : 3.5, 0, 0, 7); ctx.ellipse(x + pl.w / 2 + 7, y + 6, 3.5, scared ? 4.5 : 3.5, 0, 0, 7); ctx.fill();
       ctx.fillStyle = pal.ink;
       const lx = Math.max(-1.5, Math.min(1.5, (w.p.x - x) / 120));
       ctx.beginPath(); ctx.arc(x + pl.w / 2 - 7 + lx, y + 6, 1.8, 0, 7); ctx.arc(x + pl.w / 2 + 7 + lx, y + 6, 1.8, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
     }
     if (pl.kind === 'move') { ctx.fillStyle = pal.platD; ctx.beginPath(); ctx.arc(x + 10, y + 7, 2.5, 0, 7); ctx.arc(x + pl.w - 10, y + 7, 2.5, 0, 7); ctx.fill(); }
     if (pl.shake > 0 || pl.fallen) {
@@ -373,7 +465,7 @@ R.drawSign = function (ctx, s) {
   ctx.fillStyle = 'rgba(70,40,25,0.6)';
   ctx.fillRect(x - 10, y - 40, 20, 2); ctx.fillRect(x - 10, y - 35, 14, 2);
   if (/!$/.test(s.text)) { ctx.fillRect(x + 8, y - 41, 2, 7); ctx.fillRect(x + 8, y - 32, 2, 2); }
-  else { ctx.fillRect(x + 5, y - 32, 2, 2); ctx.fillRect(x + 8, y - 32, 2, 2); ctx.fillRect(x + 11, y - 32, 2, 2); }
+  else if (/\.\.\.$/.test(s.text)) { ctx.fillRect(x + 5, y - 32, 2, 2); ctx.fillRect(x + 8, y - 32, 2, 2); ctx.fillRect(x + 11, y - 32, 2, 2); }
 };
 R.drawBubble = function (ctx, s) {
   ctx.font = '600 15px Fredoka, system-ui, sans-serif';

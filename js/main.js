@@ -10,7 +10,7 @@ const IDS = SL.CHEAT_IDS;
 function fresh() {
   return {
     v: 1, runSeed: SL.newSeed(), level: 1, best: 1, totalDeaths: 0, cleared: 0, playTime: 0, sound: true, booted: false,
-    sheet: {}, profile: SL.Profile.blank(), history: { bonks: 0, crumbleSurvive: 0, causes: {} }, cur: null, last: [], allCrackedSaid: false
+    diff: 'normal', sheet: {}, profile: SL.Profile.blank(), history: { bonks: 0, crumbleSurvive: 0, causes: {} }, cur: null, last: [], allCrackedSaid: false
   };
 }
 function load() {
@@ -21,6 +21,10 @@ function load() {
   return fresh();
 }
 let save = load();
+// Older saves can name cheats that were retired; drop them.
+if (!SL.DIFFS[save.diff]) save.diff = 'normal';
+save.last = (save.last || []).filter(id => SL.CHEATS[id]);
+if (save.cur && (save.cur.cheats || []).some(id => !SL.CHEATS[id])) save.cur = null;
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
 const sheetOf = id => (save.sheet[id] = save.sheet[id] || { met: false, seen: false, cracked: false });
 const crackedCount = () => IDS.filter(id => save.sheet[id] && save.sheet[id].cracked).length;
@@ -28,8 +32,6 @@ const crackedCount = () => IDS.filter(id => save.sheet[id] && save.sheet[id].cra
 // ---------- icons ----------
 const ICON = {
   coldFeet: '<svg viewBox="0 0 40 40"><rect x="11" y="5" width="18" height="24" rx="8" fill="#9d74ff" stroke="#3b2a40" stroke-width="2.5"/><circle cx="16.5" cy="14" r="2" fill="#3b2a40"/><circle cx="23.5" cy="14" r="2" fill="#3b2a40"/><path d="M15 29l-3 6M25 29l3 6M9 35h6M25 35h6" stroke="#3b2a40" stroke-width="2.5" stroke-linecap="round"/><path d="M4 12h4M3 18h5" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/></svg>',
-  paperSpikes: '<svg viewBox="0 0 40 40"><path d="M4 32l6-14 6 14zM16 32l6-14 6 14z" fill="#eef2fb" stroke="#3b2a40" stroke-width="2.2" stroke-linejoin="round"/><path d="M28 32l6-14 6 14z" fill="none" stroke="#3b2a40" stroke-width="2.2" stroke-dasharray="3 3" stroke-linejoin="round"/><path d="M2 33h36" stroke="#3b2a40" stroke-width="2.5"/><path d="M33 8l1.5 3 3 1.5-3 1.5L33 17l-1.5-3-3-1.5 3-1.5z" fill="#ffcb3d" stroke="#3b2a40" stroke-width="1.5"/></svg>',
-  thirdTime: '<svg viewBox="0 0 40 40"><rect x="2" y="12" width="10" height="5" rx="2.5" fill="#ff9cc0" stroke="#3b2a40" stroke-width="2"/><rect x="15" y="12" width="10" height="5" rx="2.5" fill="#ff9cc0" stroke="#3b2a40" stroke-width="2"/><rect x="28" y="22" width="10" height="5" rx="2.5" fill="#ff9cc0" stroke="#3b2a40" stroke-width="2" transform="rotate(14 33 24)"/><path d="M31 31v4M35 30v3" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/><text x="33" y="10" font-size="10" font-weight="700" text-anchor="middle" fill="#3b2a40" font-family="Fredoka,sans-serif">3</text></svg>',
   pinholes: '<svg viewBox="0 0 40 40"><rect x="6" y="18" width="28" height="18" rx="3" fill="#e2a96f" stroke="#3b2a40" stroke-width="2.5"/><rect x="6" y="18" width="28" height="6" fill="#6dd08b" stroke="#3b2a40" stroke-width="2.5"/><circle cx="13" cy="21" r="1.8" fill="#3b2a40"/><circle cx="20" cy="21" r="1.8" fill="#3b2a40"/><circle cx="27" cy="21" r="1.8" fill="#3b2a40"/><path d="M11 16l2-9 2 9M18 16l2-9 2 9M25 16l2-9 2 9" fill="#eef2fb" stroke="#3b2a40" stroke-width="1.8" stroke-linejoin="round"/></svg>',
   shouting: '<svg viewBox="0 0 40 40"><rect x="18" y="20" width="4" height="16" fill="#8a5a3a" stroke="#3b2a40" stroke-width="2"/><rect x="5" y="6" width="30" height="17" rx="4" fill="#c99263" stroke="#3b2a40" stroke-width="2.5"/><path d="M20 9v7" stroke="#3b2a40" stroke-width="3" stroke-linecap="round"/><circle cx="20" cy="19.5" r="1.6" fill="#3b2a40"/></svg>',
   headache: '<svg viewBox="0 0 40 40"><rect x="11" y="2" width="18" height="15" rx="3" fill="#a49dba" stroke="#3b2a40" stroke-width="2.5"/><path d="M15 7l4 2M25 7l-4 2" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/><ellipse cx="20" cy="30" rx="9" ry="8" fill="#ffcb3d" stroke="#3b2a40" stroke-width="2.5"/><path d="M8 20l3 2M32 20l-3 2M20 19v-1" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="29" r="1.4" fill="#3b2a40"/><circle cx="23" cy="29" r="1.4" fill="#3b2a40"/></svg>',
@@ -40,6 +42,12 @@ const ICON = {
   swapZone: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#c9a7ff" stroke="#3b2a40" stroke-width="2.5"/><path d="M20 20m-2 0a2 2 0 1 1 4 0a4 4 0 1 1-8 0a6 6 0 1 1 12 0a8 8 0 1 1-16 0" fill="none" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/></svg>',
   impatient: '<svg viewBox="0 0 40 40"><path d="M5 22h12l-2 14H7zM23 22h12l-2 6h-8z" fill="#e2a96f" stroke="#3b2a40" stroke-width="2.5" stroke-linejoin="round"/><path d="M5 22h12M23 22h12" stroke="#6dd08b" stroke-width="4"/><path d="M11 6v8M8 9l3-3 3 3M29 6l-2 4M33 9l-3 3" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>',
   copycat: '<svg viewBox="0 0 40 40"><ellipse cx="14" cy="24" rx="9" ry="9" fill="#5a4a66" opacity=".75"/><ellipse cx="25" cy="23" rx="10" ry="10" fill="#ffcb3d" stroke="#3b2a40" stroke-width="2.5"/><circle cx="23" cy="21" r="1.8" fill="#3b2a40"/><circle cx="29" cy="21" r="1.8" fill="#3b2a40"/><circle cx="11" cy="22" r="1.5" fill="#ff4f6e"/><circle cx="16" cy="22" r="1.5" fill="#ff4f6e"/></svg>',
+  falseFloor: '<svg viewBox="0 0 40 40"><path d="M3 18h12v18H3zM25 18h12v18H25z" fill="#e2a96f" stroke="#3b2a40" stroke-width="2.5"/><path d="M3 18h12M25 18h12" stroke="#6dd08b" stroke-width="4"/><path d="M15 18h10" stroke="#6dd08b" stroke-width="4" stroke-dasharray="3 3"/><path d="M20 22v10M16 28l4 4 4-4" fill="none" stroke="#3b2a40" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  rotten: '<svg viewBox="0 0 40 40"><rect x="7" y="14" width="26" height="9" rx="4.5" fill="#ff9cc0" stroke="#3b2a40" stroke-width="2.5"/><circle cx="14" cy="18" r="2" fill="#6e963c"/><circle cx="24" cy="19" r="2.4" fill="#6e963c"/><path d="M17 23l2 5-3 4M24 23l-1 6 3 3" stroke="#3b2a40" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M12 8c2-2 4 2 6 0M22 7c2-2 4 2 6 0" stroke="#6e963c" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+  invisBlock: '<svg viewBox="0 0 40 40"><rect x="13" y="4" width="16" height="16" rx="3" fill="none" stroke="#3b2a40" stroke-width="2.2" stroke-dasharray="3 3"/><circle cx="17" cy="31" r="7" fill="#ffcb3d" stroke="#3b2a40" stroke-width="2.5"/><path d="M14 22l-3-3M20 22l1-4M24 24l4-2" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/></svg>',
+  runaway: '<svg viewBox="0 0 40 40"><path d="M18 16h18v20H18z" fill="#e2a96f" stroke="#3b2a40" stroke-width="2.5"/><path d="M18 16h18" stroke="#6dd08b" stroke-width="4"/><path d="M4 20h9M6 25h7M4 30h9" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round"/><path d="M26 8h8M31 5l3 3-3 3" fill="none" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  lunger: '<svg viewBox="0 0 40 40"><path d="M16 32l7-18 7 18z" fill="#eef2fb" stroke="#3b2a40" stroke-width="2.3" stroke-linejoin="round"/><circle cx="21" cy="25" r="1.5" fill="#ff4f6e"/><circle cx="25" cy="25" r="1.5" fill="#ff4f6e"/><path d="M3 22h9M5 27h8M3 32h9" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round"/><path d="M2 33h36" stroke="#3b2a40" stroke-width="2.5"/></svg>',
+  spikeWall: '<svg viewBox="0 0 40 40"><rect x="2" y="3" width="12" height="34" fill="#4a1735" stroke="#3b2a40" stroke-width="2.5"/><path d="M14 5l8 4-8 4M14 15l8 4-8 4M14 25l8 4-8 4" fill="#eef2fb" stroke="#3b2a40" stroke-width="2" stroke-linejoin="round"/><circle cx="31" cy="24" r="6" fill="#ffcb3d" stroke="#3b2a40" stroke-width="2.3"/><path d="M27 15l6 3" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/></svg>',
   backwardsFlag: '<svg viewBox="0 0 40 40"><path d="M14 4v32" stroke="#3b2a40" stroke-width="3" stroke-linecap="round"/><path d="M15 5c6 2 10 0 16 3l-4 5 4 5c-6-3-10-1-16-3z" fill="#6fdc98" stroke="#3b2a40" stroke-width="2.2" stroke-linejoin="round"/><path d="M36 30H22m0 0l4-4m-4 4l4 4" stroke="#3b2a40" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 const UNKNOWN_ICON = '<svg viewBox="0 0 40 40"><text x="20" y="28" font-size="24" font-weight="700" text-anchor="middle" fill="#3b2a40" font-family="Fredoka,sans-serif">?</text></svg>';
@@ -109,15 +117,25 @@ const cv = $('cv');
 const R = new SL.Renderer(cv);
 function layout() {
   const vw = window.innerWidth, vh = window.innerHeight;
-  const pad = vw < 700 ? 0 : 24;
-  const s = Math.min((vw - pad * 2) / SL.VIEW_W, (vh - pad * 2) / SL.VIEW_H);
-  const w = Math.floor(SL.VIEW_W * s), h = Math.floor(SL.VIEW_H * s);
+  const portrait = vh > vw;
+  const pad = (vw < 700 || vh < 500) ? 0 : 24;
+  // phones held upright: the game sits at the top and the controls get the space below it
+  const reserve = touchy && portrait ? Math.min(220, vh * 0.34) : 0;
+  // upright phones: show fewer tiles across (but all 15 rows) so everything stays big enough to read
+  const availW = vw - pad * 2, availH = vh - pad * 2 - reserve;
+  const viewW = touchy && portrait ? Math.round(Math.max(352, Math.min(SL.VIEW_W, SL.VIEW_H * availW / availH))) : SL.VIEW_W;
+  R.setViewW(viewW);
+  const s = Math.min(availW / viewW, availH / SL.VIEW_H);
+  document.body.classList.toggle('portrait', portrait);
+  const w = Math.floor(viewW * s), h = Math.floor(SL.VIEW_H * s);
   $('stage').style.width = w + 'px'; $('stage').style.height = h + 'px';
   $('stage').style.borderRadius = pad ? '18px' : '0';
   R.resize(w, h);
 }
 window.addEventListener('resize', layout);
-const touchy = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+window.addEventListener('orientationchange', () => setTimeout(layout, 150));
+let touchy = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || /[?&]touch=1/.test(location.search);
+if (touchy) document.body.classList.add('touchy');
 
 // ---------- state ----------
 let mode = 'title';   // title | play | pause | clear
@@ -131,14 +149,16 @@ function refreshCounts() {
   $('h-sheet-n').textContent = n; $('t-sheet-n').textContent = n;
   $('t-best').textContent = save.best; $('t-deaths').textContent = save.totalDeaths; $('t-seed').textContent = save.runSeed;
   $('t-play').textContent = save.level > 1 ? `Continue · Level ${save.level}` : 'Play';
+  for (const b of document.querySelectorAll('#t-diff button')) b.setAttribute('aria-pressed', String(b.dataset.d === save.diff));
+  $('t-diff-blurb').textContent = SL.DIFFS[save.diff].blurb;
   const snd = save.sound ? 'Sound on' : 'Sound off';
   for (const id of ['t-sound', 'p-sound']) { $(id).textContent = snd; $(id).setAttribute('aria-pressed', String(save.sound)); }
 }
 
 function levelPlan(level) {
-  if (save.cur && save.cur.level === level && save.cur.seed === save.runSeed) return save.cur;
-  const pick = SL.Profile.choose(level, save.sheet, save.profile, save.last, save.runSeed);
-  save.cur = { level, seed: save.runSeed, cheats: pick.cheats, reasons: pick.reasons, intro: pick.intro };
+  if (save.cur && save.cur.level === level && save.cur.seed === save.runSeed && save.cur.diff === save.diff) return save.cur;
+  const pick = SL.Profile.choose(level, save.sheet, save.profile, save.last, save.runSeed, save.diff);
+  save.cur = { level, seed: save.runSeed, diff: save.diff, cheats: pick.cheats, reasons: pick.reasons, intro: pick.intro };
   if (pick.intro) sheetOf(pick.intro).met = true;
   persist();
   return save.cur;
@@ -146,7 +166,7 @@ function levelPlan(level) {
 
 function makeWorld(level) {
   const plan = levelPlan(level);
-  const L = SL.buildLevel(save.runSeed, level, plan.cheats);
+  const L = SL.buildLevel(save.runSeed, level, plan.cheats, save.diff);
   return { world: new SL.World(L, save.history), plan };
 }
 
@@ -167,6 +187,9 @@ function startLevel(level, restart) {
   for (const s of ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier']) show(s, false);
   show('hud', true); show('touch', touchy);
   $('h-level').textContent = level; $('h-deaths').textContent = 0; $('h-seed').textContent = save.runSeed;
+  $('h-diff').textContent = SL.DIFFS[save.diff].name; $('h-diff').parentNode.className = 'chip diff-' + save.diff;
+  const tw = world.L.twist ? SL.TWISTS[world.L.twist] : null;
+  show('h-twist-chip', !!tw); if (tw) $('h-twist').textContent = tw.name;
   hushVoice();
   const tier = SL.tierOf(level), mood = SL.MOODS[tier];
   if (!save.booted) {
@@ -176,6 +199,7 @@ function startLevel(level, restart) {
     say(SL.say(SL.VOICE.start[mood], { n: level }), moodForTier(tier), { hold: 2.4 });
     if (levelInfo.reasons && levelInfo.reasons.length) say(levelInfo.reasons[0], 'smug', { hold: 3.2 });
   }
+  if (!restart && world.L.twist) say(SL.TWISTS[world.L.twist].say, 'smug', { hold: 2.6 });
   refreshCounts();
 }
 
@@ -229,6 +253,10 @@ function handle(e) {
     case 'floorDrop': SL.Audio.play('drop'); break;
     case 'wake': SL.Audio.play('seen'); if (!world.saidWake) { world.saidWake = true; say(SL.say(SL.VOICE.trigger.wake), 'smug', { prio: 2 }); } break;
     case 'tooth': SL.Audio.play('drop'); break;
+    case 'reveal': SL.Audio.play('bonk'); quip(SL.VOICE.trigger.reveal, 'smug'); break;
+    case 'lunge': SL.Audio.play('flee'); quip(SL.VOICE.trigger.lunge, 'smug'); break;
+    case 'wallWake': SL.Audio.play('seen'); if (!world.saidWall) { world.saidWall = true; say(SL.say(SL.VOICE.trigger.wallWake), 'smug', { prio: 2 }); } break;
+    case 'quake': SL.Audio.play('crumble'); quip(SL.VOICE.trigger.quake, 'smug'); break;
     case 'toothLand': SL.Audio.play('pop'); break;
     case 'seen': {
       const s = sheetOf(e.id);
@@ -331,13 +359,13 @@ function renderSheet() {
 function renderDossier() {
   const p = save.profile, tr = SL.Profile.traits(p), n = tr.n;
   const rows = [
-    ['Jumpiness', tr.jumpy, `${n.jps.toFixed(2)} jumps/s`, '#ffcb3d', 'Feeds: Third Time Unlucky, Headache Block, Shy Ledge'],
-    ['Caution', tr.caution, `${n.idlePct}% standing still`, '#8ed0ff', 'Feeds: Pinholes, Cold Feet, Ceiling Teeth, Impatient Floor'],
+    ['Jumpiness', tr.jumpy, `${n.jps.toFixed(2)} jumps/s`, '#ffcb3d', 'Feeds: Rotten Platforms, Headache Block, Shy Ledge, Runaway Floor, Invisible Block'],
+    ['Caution', tr.caution, `${n.idlePct}% standing still`, '#8ed0ff', 'Feeds: Pinholes, Cold Feet, Ceiling Teeth, Impatient Floor, Spike Wall'],
     ['Gullibility', tr.gullible, `${n.trustPct}% signs believed`, '#ff7aa8', 'Feeds: Shouting Signs, Mimic'],
     ['Stubbornness', tr.stubborn, `${n.dpl.toFixed(1)} deaths/level`, '#ff9c6b', 'Feeds: Wrong Way, Copycat'],
     ['Flag reliance', tr.flagLove, `${p.cpTouches} flags touched`, '#6fdc98', 'Feeds: Backwards Flag'],
-    ['Spike trouble', tr.spikey, `${(p.causes.spike || 0) + (p.causes.pinholes || 0)} spike deaths`, '#c9c3d6', 'Feeds: Paper Spikes'],
-    ['Pit trouble', tr.falls, `${(p.causes.pit || 0) + (p.causes.secretFloor || 0) + (p.causes.thirdTime || 0)} falls`, '#9d74ff', 'Feeds: Secret Floor']
+    ['Spike trouble', tr.spikey, `${(p.causes.spike || 0) + (p.causes.ceilSpike || 0) + (p.causes.pinholes || 0) + (p.causes.lunger || 0) + (p.causes.saw || 0)} spike deaths`, '#c9c3d6', 'Feeds: Lunging Spike'],
+    ['Pit trouble', tr.falls, `${(p.causes.pit || 0) + (p.causes.secretFloor || 0) + (p.causes.rotten || 0) + (p.causes.falseFloor || 0) + (p.causes.runaway || 0)} falls`, '#9d74ff', 'Feeds: Secret Floor, False Floor']
   ];
   $('d-traits').innerHTML = '';
   for (const [name, v, num, col, feeds] of rows) {
@@ -440,19 +468,84 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { const k = KEYS[e.code]; if (k) input[k] = false; });
 window.addEventListener('blur', () => { for (const k of ['left', 'right', 'jump', 'down']) input[k] = false; if (mode === 'play') pause(); });
 
-for (const b of document.querySelectorAll('#touch button')) {
-  const k = b.dataset.k;
-  const on = e => { e.preventDefault(); SL.Audio.unlock(); if (k === 'jump' && !input.jump) input.jumpPressed = true; input[k] = true; b.classList.add('down'); };
-  const off = e => { e.preventDefault(); input[k] = false; b.classList.remove('down'); };
-  b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+// Touch: every finger is tracked on its own, and sliding a finger from one button to another
+// switches keys without lifting it (left to right, or thumb rolling onto jump).
+const fingers = new Map(); // pointerId -> key
+const touchBtns = [...document.querySelectorAll('#touch button')];
+function keyAt(x, y) {
+  let best = null, bestD = 1e9;
+  for (const b of touchBtns) {
+    const r = b.getBoundingClientRect();
+    const pad = 18; // generous hit area around each button
+    if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) continue;
+    const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+    if (d < bestD) { bestD = d; best = b.dataset.k; }
+  }
+  return best;
+}
+function syncTouch() {
+  const held = new Set(fingers.values());
+  for (const k of ['left', 'right', 'jump']) {
+    const on = held.has(k);
+    if (k === 'jump' && on && !input.jump) input.jumpPressed = true;
+    input[k] = on;
+  }
+  for (const b of touchBtns) b.classList.toggle('down', held.has(b.dataset.k));
+}
+const touchEl = $('touch');
+touchEl.addEventListener('pointerdown', e => {
+  e.preventDefault(); SL.Audio.unlock();
+  try { touchEl.setPointerCapture(e.pointerId); } catch (err) { /* not supported */ }
+  fingers.set(e.pointerId, keyAt(e.clientX, e.clientY)); syncTouch();
+  if (navigator.vibrate && fingers.get(e.pointerId) === 'jump') try { navigator.vibrate(8); } catch (err) { /* ignore */ }
+});
+touchEl.addEventListener('pointermove', e => {
+  if (!fingers.has(e.pointerId)) return;
+  const k = keyAt(e.clientX, e.clientY);
+  if (k !== fingers.get(e.pointerId)) { fingers.set(e.pointerId, k); syncTouch(); }
+});
+const lift = e => { if (fingers.delete(e.pointerId)) syncTouch(); };
+touchEl.addEventListener('pointerup', lift); touchEl.addEventListener('pointercancel', lift);
+touchEl.addEventListener('contextmenu', e => e.preventDefault());
+// any real touch turns on the on-screen controls, even on laptops with touchscreens
+window.addEventListener('touchstart', () => { if (!touchy) { touchy = true; document.body.classList.add('touchy'); if (mode === 'play') show('touch', true); layout(); } }, { passive: true });
+// Phones: go fullscreen and ask for landscape when a run starts. Browsers that refuse just keep going.
+function goBig() {
+  if (!touchy) return;
+  const el = document.documentElement;
+  const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fs && !document.fullscreenElement) {
+    try {
+      const pr = fs.call(el, { navigationUI: 'hide' });
+      if (pr && pr.then) pr.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); }).catch(() => {});
+    } catch (err) { /* ignore */ }
+  }
 }
 
 // buttons
 const click = (id, fn) => $(id).addEventListener('click', () => { SL.Audio.unlock(); SL.Audio.play('click'); fn(); });
-click('t-play', () => { show('s-title', false); startLevel(save.level); });
-click('t-new', () => { show('t-confirm', true); $('t-confirm-yes').focus(); });
+click('t-play', () => { goBig(); show('s-title', false); startLevel(save.level); });
+let pendingDiff = null;
+const confirmNew = (d) => {
+  pendingDiff = d || save.diff;
+  $('t-confirm-msg').textContent = d && d !== save.diff
+    ? `Switch to ${SL.DIFFS[d].name}? That starts a new run from level 1. Your Cheat Sheet and Dossier stay.`
+    : 'Start again from level 1 with a new seed? Your Cheat Sheet and Dossier stay.';
+  show('t-confirm', true); $('t-confirm-yes').focus();
+};
+click('t-new', () => confirmNew());
+for (const b of document.querySelectorAll('#t-diff button')) {
+  b.addEventListener('click', () => {
+    SL.Audio.unlock(); SL.Audio.play('click');
+    const d = b.dataset.d;
+    if (d === save.diff) return;
+    if (save.level <= 1) { save.diff = d; save.cur = null; persist(); refreshCounts(); setupAttract(); }
+    else confirmNew(d);
+  });
+}
 click('t-confirm-no', () => show('t-confirm', false));
 click('t-confirm-yes', () => {
+  save.diff = pendingDiff || save.diff;
   save.runSeed = SL.newSeed(); save.level = 1; save.cur = null; save.last = []; persist();
   show('t-confirm', false); show('s-title', false);
   startLevel(1);
@@ -470,6 +563,7 @@ click('p-sheet', () => openOverlay('sheet'));
 click('p-dossier', () => openOverlay('dossier'));
 click('p-title', toTitle);
 click('c-next', () => startLevel(save.level));
+click('h-restart', () => { if (mode === 'play') startLevel(world.L.level, true); });
 click('c-sheet', () => openOverlay('sheet'));
 click('c-dossier', () => openOverlay('dossier'));
 click('c-title', toTitle);
@@ -501,7 +595,7 @@ function frame(now) {
     R.draw(0);
   } else if (mode === 'title' && attract) {
     attractCam += dt * 38;
-    const maxCam = attract.L.w * SL.TILE - SL.VIEW_W;
+    const maxCam = attract.L.w * SL.TILE - R.viewW;
     if (attractCam > maxCam) attractCam = 0;
     attract.platMove(0); attract.t += dt;
     R.draw(dt, { camX: attractCam, hidePlayer: attractCam > 300 });
