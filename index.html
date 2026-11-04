@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sore Loser</title>
+<meta name="description" content="A cute little platformer that cheats. It moves the exit, lies on its signs and fakes its spikes, but every cheat follows a rule. Learn the rules, then beat it.">
+<meta name="theme-color" content="#1c1226">
+<link rel="preload" href="fonts/Fredoka-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='24' rx='7' fill='%23ffcb3d' stroke='%233b2a40' stroke-width='2.5'/%3E%3Ccircle cx='11' cy='15' r='2.5' fill='%233b2a40'/%3E%3Cpath d='M18 13l5 2-5 2' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3Cpath d='M10 21q6 4 12-1' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv" aria-label="Sore Loser game view"></canvas>
+
+    <div id="hud" class="hud" hidden>
+      <div class="hud-l">
+        <div class="chip"><span>Level</span><b id="h-level">1</b></div>
+        <div class="chip"><span>Deaths</span><b id="h-deaths">0</b></div>
+        <div class="chip ghost"><span>Seed</span><b id="h-seed">-----</b></div>
+      </div>
+      <div class="hud-r">
+        <button type="button" class="pill" id="h-sheet" title="Cheat Sheet (C)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 2h9l3 3v13H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 8h6M7 11h6M7 14h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Cheat Sheet</span><i id="h-sheet-n">0/14</i></button>
+        <button type="button" class="pill icon" id="h-pause" title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="4" width="3.5" height="12" rx="1.2" fill="currentColor"/><rect x="11.5" y="4" width="3.5" height="12" rx="1.2" fill="currentColor"/></svg></button>
+      </div>
+    </div>
+
+    <div id="voice" class="voice" aria-live="polite">
+      <div class="face" id="face">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="5" y="9" width="54" height="44" rx="14" class="f-body"/>
+          <rect x="11" y="15" width="42" height="32" rx="9" class="f-screen"/>
+          <path id="f-brows" d="" class="f-line"/>
+          <path id="f-eyes" d="" class="f-eye"/>
+          <path id="f-mouth" d="" class="f-line"/>
+          <rect x="22" y="53" width="20" height="5" rx="2" class="f-body"/>
+        </svg>
+      </div>
+      <div class="vbody">
+        <div class="vname">THE GAME</div>
+        <p id="vtext"></p>
+      </div>
+    </div>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <div id="touch" class="touch" hidden>
+      <div class="t-l">
+        <button type="button" data-k="left" aria-label="Left"><svg viewBox="0 0 20 20"><path d="M13 4l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" data-k="right" aria-label="Right"><svg viewBox="0 0 20 20"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <button type="button" data-k="jump" class="t-jump" aria-label="Jump">JUMP</button>
+    </div>
+  </div>
+
+  <!-- Title -->
+  <section id="s-title" class="screen title-screen">
+    <div class="title-wrap">
+      <h1 class="logo" aria-label="Sore Loser">
+        <span class="w1"><b>S</b><b>O</b><b>R</b><b>E</b></span>
+        <span class="w2"><b>L</b><b class="peek">O</b><b>S</b><b>E</b><b class="flip">R</b></span>
+      </h1>
+      <p class="tag">A very cute, very fair platformer.<br><span class="tag-sub">It cheats. Every cheat has a rule. Learn the rules, then beat it.</span></p>
+      <div class="menu">
+        <button type="button" class="btn primary big" id="t-play">Play</button>
+        <div class="menu-row">
+          <button type="button" class="btn" id="t-sheet">Cheat Sheet <i id="t-sheet-n">0/14</i></button>
+          <button type="button" class="btn" id="t-dossier">Your Dossier</button>
+        </div>
+        <button type="button" class="btn ghost small" id="t-new">New run</button>
+      </div>
+      <div class="confirm" id="t-confirm" hidden>
+        <p>Start again from level 1 with a new seed? Your Cheat Sheet and Dossier stay.</p>
+        <div class="menu-row"><button type="button" class="btn primary" id="t-confirm-yes">New run</button><button type="button" class="btn" id="t-confirm-no">Keep going</button></div>
+      </div>
+      <dl class="title-stats">
+        <div><dt>Best</dt><dd id="t-best">1</dd></div>
+        <div><dt>Deaths</dt><dd id="t-deaths">0</dd></div>
+        <div><dt>Seed</dt><dd id="t-seed">-----</dd></div>
+      </dl>
+      <p class="keys"><kbd>←</kbd><kbd>→</kbd> move &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>R</kbd> restart &nbsp; <kbd>C</kbd> cheat sheet &nbsp; <kbd>Esc</kbd> pause</p>
+      <button type="button" class="sound-btn" id="t-sound" aria-pressed="true">Sound on</button>
+    </div>
+  </section>
+
+  <!-- Cheat Sheet -->
+  <section id="s-sheet" class="screen" hidden>
+    <div class="panel sheet">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">Field notes on a liar</p>
+          <h2>Cheat Sheet</h2>
+        </div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <div class="progress"><div class="bar"><i id="sheet-bar"></i></div><span id="sheet-count">0 of 14 cracked</span></div>
+      <div class="cards" id="sheet-cards"></div>
+      <p class="panel-foot">Spot a cheat to learn what it does. Beat it on purpose to learn its rule.</p>
+    </div>
+  </section>
+
+  <!-- Dossier -->
+  <section id="s-dossier" class="screen" hidden>
+    <div class="panel dossier">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">Confidential · property of the game</p>
+          <h2>Subject: You</h2>
+        </div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <div class="stamp">Watching</div>
+      <div class="dossier-grid">
+        <div>
+          <h3>Tendencies</h3>
+          <div id="d-traits" class="traits"></div>
+        </div>
+        <div>
+          <h3>What I'm doing about it</h3>
+          <ul id="d-plan" class="plan"></ul>
+          <h3>Record</h3>
+          <dl id="d-stats" class="dstats"></dl>
+        </div>
+      </div>
+      <p class="panel-foot">Built from counters only: how often you jump, wait, trust signs, use flags and die. The next level is picked from this.</p>
+    </div>
+  </section>
+
+  <!-- Level cleared -->
+  <section id="s-clear" class="screen" hidden>
+    <div class="panel clear">
+      <p class="eyebrow" id="c-eyebrow">Level 1</p>
+      <h2 class="clear-h">Cleared</h2>
+      <p class="clear-quote" id="c-quote">"That one did not count."</p>
+      <dl class="clear-stats">
+        <div><dt>Time</dt><dd id="c-time">0:00</dd></div>
+        <div><dt>Deaths</dt><dd id="c-deaths">0</dd></div>
+        <div><dt>Jumps</dt><dd id="c-jumps">0</dd></div>
+      </dl>
+      <h3>Cheats used on you</h3>
+      <div class="used" id="c-used"></div>
+      <div class="menu-row">
+        <button type="button" class="btn primary big" id="c-next">Next level <kbd>Enter</kbd></button>
+      </div>
+      <div class="menu-row">
+        <button type="button" class="btn small" id="c-sheet">Cheat Sheet</button>
+        <button type="button" class="btn small" id="c-dossier">Dossier</button>
+        <button type="button" class="btn small ghost" id="c-title">Title</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <section id="s-pause" class="screen" hidden>
+    <div class="panel pause">
+      <h2>Paused</h2>
+      <p class="pause-sub" id="p-sub">Level 1</p>
+      <div class="menu">
+        <button type="button" class="btn primary big" id="p-resume">Resume</button>
+        <button type="button" class="btn" id="p-restart">Restart level</button>
+        <div class="menu-row">
+          <button type="button" class="btn small" id="p-sheet">Cheat Sheet</button>
+          <button type="button" class="btn small" id="p-dossier">Dossier</button>
+        </div>
+        <button type="button" class="btn small" id="p-sound" aria-pressed="true">Sound on</button>
+        <button type="button" class="btn ghost small" id="p-title">Quit to title</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="js/core.js?v=3"></script>
+<script src="js/profile.js?v=3"></script>
+<script src="js/game.js?v=3"></script>
+<script src="js/voice.js?v=3"></script>
+<script src="js/audio.js?v=3"></script>
+<script src="js/render.js?v=3"></script>
+<script src="js/main.js?v=3"></script>
+</body>
+</html>
