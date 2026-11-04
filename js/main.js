@@ -10,7 +10,8 @@ const IDS = SL.CHEAT_IDS;
 function fresh() {
   return {
     v: 1, runSeed: SL.newSeed(), level: 1, best: 1, totalDeaths: 0, cleared: 0, playTime: 0, sound: true, booted: false,
-    diff: 'normal', sheet: {}, profile: SL.Profile.blank(), history: { bonks: 0, crumbleSurvive: 0, causes: {} }, cur: null, last: [], allCrackedSaid: false
+    diff: 'normal', coins: 0, owned: [], equip: { skin: 'sunny', hat: 'sprout', trail: 'dust', death: 'pop' }, trophies: {}, pityPaid: 0,
+    stats2: { clean: 0, hard: 0, rage: 0, maxDeathsCleared: 0, fastest: 0, twists: {}, grabbed: 0 }, sheet: {}, profile: SL.Profile.blank(), history: { bonks: 0, crumbleSurvive: 0, causes: {} }, cur: null, last: [], allCrackedSaid: false
   };
 }
 function load() {
@@ -23,6 +24,13 @@ function load() {
 let save = load();
 // Older saves can name cheats that were retired; drop them.
 if (!SL.DIFFS[save.diff]) save.diff = 'normal';
+save.stats2 = Object.assign({ clean: 0, hard: 0, rage: 0, maxDeathsCleared: 0, fastest: 0, twists: {}, grabbed: 0 }, save.stats2);
+save.equip = Object.assign({ skin: 'sunny', hat: 'sprout', trail: 'dust', death: 'pop' }, save.equip);
+for (const k in save.equip) if (!SL.ITEM[save.equip[k]]) save.equip[k] = SL.ITEMS.find(i => i.slot === k && i.free).id;
+// long-time players: pity coins start from where they are, not from zero
+if (!save.pityPaid) save.pityPaid = Math.floor(save.totalDeaths / 50);
+SL.look = save.equip;
+const owns = id => { const it = SL.ITEM[id]; return !!it && (it.free || save.owned.indexOf(id) >= 0); };
 save.last = (save.last || []).filter(id => SL.CHEATS[id]);
 if (save.cur && (save.cur.cheats || []).some(id => !SL.CHEATS[id])) save.cur = null;
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
@@ -147,6 +155,7 @@ function show(id, on) { $(id).hidden = !on; }
 function refreshCounts() {
   const n = crackedCount() + '/' + IDS.length;
   $('h-sheet-n').textContent = n; $('t-sheet-n').textContent = n;
+  for (const id of ['t-coins', 'h-coins']) $(id).textContent = save.coins;
   $('t-best').textContent = save.best; $('t-deaths').textContent = save.totalDeaths; $('t-seed').textContent = save.runSeed;
   $('t-play').textContent = save.level > 1 ? `Continue · Level ${save.level}` : 'Play';
   for (const b of document.querySelectorAll('#t-diff button')) b.setAttribute('aria-pressed', String(b.dataset.d === save.diff));
@@ -184,7 +193,7 @@ function startLevel(level, restart) {
   world = made.world; levelInfo = made.plan; levelTime = 0;
   R.setWorld(world);
   mode = 'play'; overlay = null;
-  for (const s of ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier']) show(s, false);
+  for (const s of ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies']) show(s, false);
   show('hud', true); show('touch', touchy);
   $('h-level').textContent = level; $('h-deaths').textContent = 0; $('h-seed').textContent = save.runSeed;
   $('h-diff').textContent = SL.DIFFS[save.diff].name; $('h-diff').parentNode.className = 'chip diff-' + save.diff;
@@ -223,6 +232,14 @@ function handle(e) {
     case 'death': {
       SL.Audio.play('die');
       $('h-deaths').textContent = world.stats.deaths;
+      const live = save.totalDeaths + world.stats.deaths;
+      if (Math.floor(live / 50) > save.pityPaid) {
+        save.pityPaid = Math.floor(live / 50); save.coins += 10; persist(); refreshCounts();
+        toast('coin', 'Pity coins', '+10 Spite Coins', COIN_ICON);
+        say(SL.say(SL.VOICE.pity, { n: live }), 'smug', { prio: 3, hold: 2.6 });
+        break;
+      }
+      checkTrophies(live);
       const fake = world.cpFake && !world.cpReal;
       if (fake) say(SL.say(SL.VOICE.fakeSave), 'smug', { prio: 2 });
       else if (e.cause === 'ceilSpike') say(SL.say(SL.VOICE.death.ceilSpike), 'smug', { prio: 2 });
@@ -253,6 +270,7 @@ function handle(e) {
     case 'floorDrop': SL.Audio.play('drop'); break;
     case 'wake': SL.Audio.play('seen'); if (!world.saidWake) { world.saidWake = true; say(SL.say(SL.VOICE.trigger.wake), 'smug', { prio: 2 }); } break;
     case 'tooth': SL.Audio.play('drop'); break;
+    case 'coin': SL.Audio.play('coin'); $('h-coins').textContent = save.coins + world.coinsGot.size * 5; bumpEl('h-coin-chip'); break;
     case 'reveal': SL.Audio.play('bonk'); quip(SL.VOICE.trigger.reveal, 'smug'); break;
     case 'lunge': SL.Audio.play('flee'); quip(SL.VOICE.trigger.lunge, 'smug'); break;
     case 'wallWake': SL.Audio.play('seen'); if (!world.saidWall) { world.saidWall = true; say(SL.say(SL.VOICE.trigger.wallWake), 'smug', { prio: 2 }); } break;
@@ -289,11 +307,23 @@ function handle(e) {
   }
   void mood;
 }
+function bumpEl(id) { const b = $(id); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
 function bump() { const b = $('h-sheet'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
 
 function finishLevel() {
   const L = world.L, st = world.stats;
   const deaths = st.deaths, jumps = st.jumps;
+  const grabbed = world.coinsGot.size;
+  const pay = SL.payout(L.level, deaths, grabbed, L.diff, L.twist);
+  save.coins += pay.total;
+  const s2 = save.stats2;
+  s2.grabbed += grabbed;
+  if (!deaths) s2.clean++;
+  if (L.diff === 'hard') s2.hard++;
+  if (L.diff === 'rage') s2.rage++;
+  s2.maxDeathsCleared = Math.max(s2.maxDeathsCleared, deaths);
+  if (!s2.fastest || levelTime < s2.fastest) s2.fastest = levelTime;
+  if (L.twist) s2.twists[L.twist] = true;
   commitStats();
   save.profile.levels++;
   if (L.checkpoint) save.profile.cpLevels++;
@@ -311,6 +341,8 @@ function finishLevel() {
   const m = Math.floor(levelTime / 60), s = Math.floor(levelTime % 60);
   $('c-time').textContent = m + ':' + String(s).padStart(2, '0');
   $('c-deaths').textContent = deaths; $('c-jumps').textContent = jumps;
+  $('c-pay').innerHTML = pay.rows.map(([k, v]) => `<div><span>${k}</span><b>+${v}</b></div>`).join('') + `<div class="pay-total"><span>Spite Coins</span><b>+${pay.total}</b></div>`;
+  setTimeout(() => checkTrophies(save.totalDeaths), 400);
   $('c-used').innerHTML = '';
   for (const id of L.cheats) {
     const sh = sheetOf(id), C = SL.CHEATS[id];
@@ -402,9 +434,102 @@ function renderDossier() {
   $('d-stats').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
 }
 
+// ---------- shop ----------
+const COIN_ICON = '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="#ffd84d" stroke="#3b2a40" stroke-width="3"/><rect x="14" y="15" width="3" height="3" fill="#3b2a40"/><rect x="23" y="15" width="3" height="3" fill="#3b2a40"/><path d="M14 25q6 3 12-1" stroke="#3b2a40" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>';
+let shopTab = 'skin';
+function preview(cv, look) {
+  const ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = 72 * dpr; cv.height = 72 * dpr;
+  ctx.setTransform(dpr * 1.35, 0, 0, dpr * 1.35, 0, 0);
+  ctx.clearRect(0, 0, 72, 72);
+  SL.drawBlob(ctx, { cx: 26.7, by: 47, face: 1, time: performance.now() / 1000, skin: look.skin, hat: look.hat });
+}
+function lookFor(it) {
+  const l = Object.assign({}, save.equip);
+  if (it.slot === 'skin') l.skin = it.id; if (it.slot === 'hat') l.hat = it.id;
+  return l;
+}
+function renderShop() {
+  $('shop-coins').textContent = save.coins;
+  $('shop-tabs').innerHTML = SL.SLOTS.map(([k, n]) => `<button type="button" data-tab="${k}" aria-pressed="${k === shopTab}">${n}</button>`).join('');
+  for (const b of $('shop-tabs').querySelectorAll('button')) b.onclick = () => { shopTab = b.dataset.tab; SL.Audio.play('click'); renderShop(); };
+  const box = $('shop-items');
+  box.innerHTML = '';
+  for (const it of SL.ITEMS.filter(i => i.slot === shopTab)) {
+    const own = owns(it.id), on = save.equip[it.slot] === it.id;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'item' + (on ? ' on' : '') + (own ? ' own' : '') + (it.trophy && !own ? ' locked' : '');
+    const tr = it.trophy && SL.TROPHIES.find(t => t.id === it.trophy);
+    const tag = on ? 'Wearing' : own ? 'Wear' : it.trophy ? 'Trophy: ' + tr.name : `<i>${it.price}</i>`;
+    card.innerHTML = `<canvas width="72" height="72"></canvas><b></b><span class="tag">${tag}</span>`;
+    card.querySelector('b').textContent = it.name;
+    const cv = card.querySelector('canvas');
+    if (it.slot === 'skin' || it.slot === 'hat') preview(cv, lookFor(it));
+    else { cv.replaceWith(Object.assign(document.createElement('div'), { className: 'fx-ico', textContent: { dust: '··', sparkle: '✦', bubbles: '○', hearts: '♥', rainbow: '≋', flames: '🔥', pop: '✺', confetti: '✱', oof: 'OOF', pixels: '▦', soul: '👻', nope: 'QUIT' }[it.id] || '?' })); }
+    card.onclick = () => buy(it);
+    box.appendChild(card);
+  }
+  // the troll shelf
+  for (const t of SL.TROLL_ITEMS) {
+    const card = document.createElement('button');
+    card.type = 'button'; card.className = 'item troll';
+    card.innerHTML = `<div class="fx-ico">?</div><b></b><span class="tag">${t.sold ? 'Sold out' : '<i>' + t.price + '</i>'}</span>`;
+    card.querySelector('b').textContent = t.name;
+    card.onclick = () => { SL.Audio.play('bonk'); shopSay(t.say); };
+    box.appendChild(card);
+  }
+}
+function shopSay(text) { const el = $('shop-say'); el.textContent = '“' + text + '”'; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+function buy(it) {
+  if (owns(it.id)) {
+    save.equip[it.slot] = it.id; SL.look = save.equip; persist();
+    SL.Audio.play('click'); renderShop(); return;
+  }
+  if (it.trophy) { SL.Audio.play('head'); shopSay('Not for sale. Earn it. Check the trophies.'); return; }
+  if (save.coins < it.price) { SL.Audio.play('head'); shopSay(SL.say(SL.VOICE.broke, { n: it.price - save.coins })); return; }
+  save.coins -= it.price; save.owned.push(it.id); save.equip[it.slot] = it.id; SL.look = save.equip; persist();
+  SL.Audio.play('crack'); shopSay(SL.say(SL.VOICE.bought));
+  refreshCounts(); renderShop(); checkTrophies(save.totalDeaths);
+}
+
+// ---------- trophies ----------
+function checkTrophies(liveDeaths) {
+  const view = Object.assign({}, save, { totalDeaths: liveDeaths !== undefined ? liveDeaths : save.totalDeaths });
+  const n = crackedCount();
+  for (const t of SL.TROPHIES) {
+    if (save.trophies[t.id] || !t.test(view, n)) continue;
+    save.trophies[t.id] = { at: Date.now() };
+    save.coins += t.coins || 0;
+    if (t.item && save.owned.indexOf(t.item) < 0) save.owned.push(t.item);
+    persist(); refreshCounts();
+    SL.Audio.play('crack');
+    toast('trophy', 'Trophy · +' + (t.coins || 0) + (t.item ? ' + ' + SL.ITEM[t.item].name : ''), t.name, TROPHY_ICON);
+  }
+}
+const TROPHY_ICON = '<svg viewBox="0 0 40 40"><path d="M12 6h16v8a8 8 0 0 1-16 0z" fill="#ffd84d" stroke="#3b2a40" stroke-width="2.5"/><path d="M12 9H6q0 7 7 7M28 9h6q0 7-7 7" fill="none" stroke="#3b2a40" stroke-width="2.5"/><path d="M20 22v6M13 34h14l-2-6H15z" fill="#ffd84d" stroke="#3b2a40" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+function renderTrophies() {
+  const got = SL.TROPHIES.filter(t => save.trophies[t.id]).length;
+  $('tro-count').textContent = `${got} of ${SL.TROPHIES.length}`;
+  $('tro-bar').style.width = (got / SL.TROPHIES.length * 100) + '%';
+  $('tro-list').innerHTML = '';
+  for (const t of SL.TROPHIES) {
+    const on = !!save.trophies[t.id];
+    const row = document.createElement('div');
+    row.className = 'trophy' + (on ? ' on' : '');
+    const reward = [t.coins ? `+${t.coins} coins` : '', t.item ? SL.ITEM[t.item].name : ''].filter(Boolean).join(' · ');
+    row.innerHTML = `<div class="ti">${on ? TROPHY_ICON : UNKNOWN_ICON}</div><div><b></b><span></span></div><em></em>`;
+    row.querySelector('b').textContent = t.name;
+    row.querySelector('span').textContent = t.desc;
+    row.querySelector('em').textContent = reward;
+    $('tro-list').appendChild(row);
+  }
+}
+
 function openOverlay(which) {
   overlay = which;
-  if (which === 'sheet') renderSheet(); else renderDossier();
+  ({ sheet: renderSheet, dossier: renderDossier, shop: renderShop, trophies: renderTrophies })[which]();
+  if (which === 'shop') $('shop-say').textContent = '“' + SL.say(SL.VOICE.shopHello) + '”';
   show('s-' + which, true);
   setTimeout(() => $('s-' + which).querySelector('[data-close]').focus(), 30);
   SL.Audio.play('click');
@@ -429,7 +554,7 @@ function resume() { if (mode !== 'pause') return; show('s-pause', false); mode =
 function toTitle() {
   if (world && !world.won) commitStats();
   world = null; mode = 'title'; overlay = null;
-  for (const s of ['s-pause', 's-clear', 's-sheet', 's-dossier']) show(s, false);
+  for (const s of ['s-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies']) show(s, false);
   show('hud', false); show('touch', false); show('s-title', true); show('t-confirm', false);
   hushVoice();
   setupAttract();
@@ -553,6 +678,10 @@ click('t-confirm-yes', () => {
 });
 click('t-sheet', () => openOverlay('sheet'));
 click('t-dossier', () => openOverlay('dossier'));
+click('t-shop', () => openOverlay('shop'));
+click('t-trophies', () => openOverlay('trophies'));
+click('c-shop', () => openOverlay('shop'));
+click('p-shop', () => openOverlay('shop'));
 const toggleSound = () => { save.sound = !save.sound; SL.Audio.on = save.sound; persist(); refreshCounts(); };
 click('t-sound', toggleSound); click('p-sound', toggleSound);
 click('h-sheet', () => { pause(); openOverlay('sheet'); });
@@ -568,7 +697,7 @@ click('c-sheet', () => openOverlay('sheet'));
 click('c-dossier', () => openOverlay('dossier'));
 click('c-title', toTitle);
 for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', () => { SL.Audio.play('click'); closeOverlay(); });
-for (const s of ['s-sheet', 's-dossier']) $(s).addEventListener('click', e => { if (e.target === $(s)) closeOverlay(); });
+for (const s of ['s-sheet', 's-dossier', 's-shop', 's-trophies']) $(s).addEventListener('click', e => { if (e.target === $(s)) closeOverlay(); });
 
 // ---------- loop ----------
 let last = performance.now(), acc = 0;
@@ -610,5 +739,6 @@ SL.Audio.on = save.sound;
 layout();
 setupAttract();
 refreshCounts();
+setTimeout(() => checkTrophies(), 900); // anything already earned pays out on boot
 requestAnimationFrame(frame);
 })();

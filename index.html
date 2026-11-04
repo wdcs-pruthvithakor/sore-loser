@@ -9,7 +9,7 @@
 <meta name="description" content="A cute little platformer that cheats. It moves the exit, lies on its signs and fakes its spikes, but every cheat follows a rule. Learn the rules, then beat it.">
 <meta name="theme-color" content="#1c1226">
 <link rel="preload" href="fonts/Fredoka-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=6">
+<link rel="stylesheet" href="css/style.css?v=7">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='24' rx='7' fill='%23ffcb3d' stroke='%233b2a40' stroke-width='2.5'/%3E%3Ccircle cx='11' cy='15' r='2.5' fill='%233b2a40'/%3E%3Cpath d='M18 13l5 2-5 2' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3Cpath d='M10 21q6 4 12-1' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -21,6 +21,7 @@
       <div class="hud-l">
         <div class="chip"><span>Level</span><b id="h-level">1</b></div>
         <div class="chip"><span>Deaths</span><b id="h-deaths">0</b></div>
+        <div class="chip coin" id="h-coin-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="#ffd84d" stroke="currentColor" stroke-width="2"/></svg><b id="h-coins">0</b></div>
         <div class="chip diff-normal"><b id="h-diff">Normal</b></div>
         <div class="chip twist" id="h-twist-chip" hidden><span>Twist</span><b id="h-twist">Ice</b></div>
         <div class="chip ghost seed"><span>Seed</span><b id="h-seed">-----</b></div>
@@ -73,6 +74,10 @@
         <div class="menu-row">
           <button type="button" class="btn" id="t-sheet">Cheat Sheet <i id="t-sheet-n">0/18</i></button>
           <button type="button" class="btn" id="t-dossier">Your Dossier</button>
+        </div>
+        <div class="menu-row">
+          <button type="button" class="btn shop-btn" id="t-shop"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="#ffd84d" stroke="currentColor" stroke-width="2"/></svg>Shop <i id="t-coins">0</i></button>
+          <button type="button" class="btn" id="t-trophies">Trophies</button>
         </div>
         <button type="button" class="btn ghost small" id="t-new">New run</button>
       </div>
@@ -141,6 +146,39 @@
     </div>
   </section>
 
+  <!-- Shop -->
+  <section id="s-shop" class="screen" hidden>
+    <div class="panel shop">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">The Game's gift shop · no refunds</p>
+          <h2>Shop</h2>
+        </div>
+        <div class="wallet"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="#ffd84d" stroke="currentColor" stroke-width="2"/></svg><b id="shop-coins">0</b></div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <p class="shop-say" id="shop-say"></p>
+      <div class="seg tabs" id="shop-tabs"></div>
+      <div class="items" id="shop-items"></div>
+      <p class="panel-foot">Earn Spite Coins by clearing levels (Hard ×1.5, Rage ×2.5), grabbing coins, not dying, and from trophies. Looks only: nothing here makes the game easier.</p>
+    </div>
+  </section>
+
+  <!-- Trophies -->
+  <section id="s-trophies" class="screen" hidden>
+    <div class="panel trophies">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">Things you did despite me</p>
+          <h2>Trophies</h2>
+        </div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <div class="progress"><div class="bar"><i id="tro-bar"></i></div><span id="tro-count">0 of 18</span></div>
+      <div class="tro-list" id="tro-list"></div>
+    </div>
+  </section>
+
   <!-- Level cleared -->
   <section id="s-clear" class="screen" hidden>
     <div class="panel clear">
@@ -152,6 +190,7 @@
         <div><dt>Deaths</dt><dd id="c-deaths">0</dd></div>
         <div><dt>Jumps</dt><dd id="c-jumps">0</dd></div>
       </dl>
+      <div class="pay" id="c-pay"></div>
       <h3>Cheats used on you</h3>
       <div class="used" id="c-used"></div>
       <div class="menu-row">
@@ -160,6 +199,7 @@
       <div class="menu-row">
         <button type="button" class="btn small" id="c-sheet">Cheat Sheet</button>
         <button type="button" class="btn small" id="c-dossier">Dossier</button>
+        <button type="button" class="btn small" id="c-shop">Shop</button>
         <button type="button" class="btn small ghost" id="c-title">Title</button>
       </div>
     </div>
@@ -176,6 +216,7 @@
         <div class="menu-row">
           <button type="button" class="btn small" id="p-sheet">Cheat Sheet</button>
           <button type="button" class="btn small" id="p-dossier">Dossier</button>
+          <button type="button" class="btn small" id="p-shop">Shop</button>
         </div>
         <button type="button" class="btn small" id="p-sound" aria-pressed="true">Sound on</button>
         <button type="button" class="btn ghost small" id="p-title">Quit to title</button>
@@ -184,12 +225,13 @@
   </section>
 </div>
 
-<script src="js/core.js?v=6"></script>
-<script src="js/profile.js?v=6"></script>
-<script src="js/game.js?v=6"></script>
-<script src="js/voice.js?v=6"></script>
-<script src="js/audio.js?v=6"></script>
-<script src="js/render.js?v=6"></script>
-<script src="js/main.js?v=6"></script>
+<script src="js/core.js?v=7"></script>
+<script src="js/profile.js?v=7"></script>
+<script src="js/game.js?v=7"></script>
+<script src="js/voice.js?v=7"></script>
+<script src="js/audio.js?v=7"></script>
+<script src="js/cosmetics.js?v=7"></script>
+<script src="js/render.js?v=7"></script>
+<script src="js/main.js?v=7"></script>
 </body>
 </html>

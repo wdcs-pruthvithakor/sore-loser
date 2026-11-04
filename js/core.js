@@ -210,7 +210,7 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
   const g = new Uint8Array(MAXW * H);
   const L = {
     level, seed, diff, tier: SL.tierOf(level), gt: tier, cheats: cheats.slice(), plats: [], signs: [], forks: [], saws: [], mimics: [],
-    tunnels: [], lungers: [], invis: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null
+    tunnels: [], lungers: [], invis: [], coins: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null
   };
   const get = (c, row) => (c >= 0 && c < MAXW && row >= 0 && row < H) ? g[row * MAXW + c] : E;
   const set = (c, row, v) => { if (c >= 0 && c < MAXW && row >= 0 && row < H) g[row * MAXW + c] = v; };
@@ -226,22 +226,26 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
   const strip = t => rage ? t.replace(/(!|\.\.\.)$/, '').replace(/\.\.\./g, ',') : t;
   const sign = (c, text) => { L.signs.push({ x: c * T + T / 2, y: h * T, text: strip(text), lie: /!$/.test(text) }); protect.add(c); };
   const maxGap = [3, 4, 4, 5, 5][tier];
+  // Spite Coins sit in risky spots: over gaps, over spikes, on platforms, under spike ceilings.
+  const coin = (px, py, p) => { if (L.coins.length < 7 && r.chance(p)) L.coins.push({ x: px, y: py }); };
   const sawSpeed = [1, 1.15, 1.3, 1.45, 1.6][tier];
 
   // ----- ordinary segments -----
   const segGap = () => {
     flat(1);
     const n = r.int(2, maxGap);
+    coin((x + n / 2) * T, (h - 2.6) * T, 0.55);
     pit(n);
     let dh = r.int(-1, 1);
     if (n >= 4 && dh < 0) dh = 0;
     h = clampH(h + dh);
     flat(r.int(tier >= 3 ? 1 : 2, 3));
   };
-  const segStep = () => { h = clampH(h + r.pick([-2, -1, 1, 2])); flat(r.int(2, 3)); };
+  const segStep = () => { h = clampH(h + r.pick([-2, -1, 1, 2])); coin((x + 1) * T, (h - 2.2) * T, 0.3); flat(r.int(2, 3)); };
   const segSpikes = () => {
     flat(2);
     const n = r.int(1, [2, 3, 3, 4, 4][tier]);
+    coin((x + n / 2) * T, (h - 3) * T, 0.55);
     for (let i = 0; i < n; i++) { col(x + i, h); set(x + i, h - 1, SPIKE); }
     x += n;
     flat(2);
@@ -255,6 +259,7 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
       const nr = Math.max(5, Math.min(12, row + r.int(-1, 1)));
       const w = tier >= 2 ? r.int(1, 2) : 2;
       L.plats.push({ x: c * T, y: nr * T, w: w * T, kind: 'static' });
+      coin((c + w / 2) * T, nr * T - 22, 0.3);
       c += w; row = nr;
     }
     for (let i = x; i < c; i++) set(i, H - 1, SPIKE);
@@ -269,12 +274,13 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
     const x0 = x * T, x1 = (x + n - 2) * T;
     const speed = 70 + tier * 12;
     L.plats.push({ x: x0, y: h * T, w: (tier >= 3 ? 1.5 : 2) * T, kind: 'move', x0, x1, omega: Math.PI * speed / (x1 - x0), phase: r() * Math.PI * 2 });
+    coin((x + n / 2) * T, (h - 2.4) * T, 0.6);
     pit(n);
     flat(2);
   };
   const segPillars = () => {
     const n = r.int(2, 4 + Math.min(2, tier));
-    for (let i = 0; i < n; i++) { pit(r.int(1, Math.min(4, maxGap - 1))); h = clampH(h + r.int(-1, 1)); flat(tier >= 2 ? 1 : r.int(1, 2)); }
+    for (let i = 0; i < n; i++) { pit(r.int(1, Math.min(4, maxGap - 1))); h = clampH(h + r.int(-1, 1)); coin((x + 0.5) * T, (h - 1.6) * T, 0.18); flat(tier >= 2 ? 1 : r.int(1, 2)); }
     pit(r.int(1, 2)); h = clampH(h + r.int(-1, 1)); flat(2);
   };
   // A slab of hanging spikes over a gap: only a short hop gets under it.
@@ -285,6 +291,7 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
     const n = r.int(2, tier >= 1 ? 3 : 2);
     const a = x - 1, b = x + n;
     for (let c = a; c <= b; c++) { for (let row = Math.max(0, h - 7); row <= h - 5; row++) set(c, row, GROUND); set(c, h - 4, SPIKED); }
+    coin((x + n / 2) * T, (h - 1.9) * T, 0.7);
     pit(n);
     flat(2);
   };

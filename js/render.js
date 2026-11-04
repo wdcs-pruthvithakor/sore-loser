@@ -73,7 +73,8 @@ R.event = function (e) {
   switch (e.type) {
     case 'jump': this.dust(e.x, e.y, 4); break;
     case 'land': this.dust(e.x, e.y, 5); break;
-    case 'death': this.burst(e.x, e.y, 26, pal.body, 260, 0.8); this.burst(e.x, e.y, 10, pal.ink, 200, 0.6); this.shake = 0.3; break;
+    case 'death': this.deathFx(e); break;
+    case 'coin': this.burst(e.x, e.y, 10, '#ffd84d', 150, 0.5, 'star'); this.parts.push({ x: e.x, y: e.y - 14, vx: 0, vy: -50, life: 0.8, max: 0.8, color: '#ffd84d', size: 14, kind: 'text', text: '+5', g: 0 }); break;
     case 'flee': this.glitch = 0.28; this.burst(e.x, e.y - 20, 10, '#ffffff', 160, 0.5, 'star'); break;
     case 'crumble': this.glitch = 0.18; break;
     case 'platFall': this.burst(e.x, e.y, 12, pal.platD, 160, 0.6); break;
@@ -94,6 +95,28 @@ R.event = function (e) {
     case 'wallWake': this.glitch = 0.25; break;
     case 'quake': this.shake = 0.45; break;
   }
+};
+
+R.deathFx = function (e) {
+  const look = SL.look || {}, skin = SL.ITEM[look.skin] || SL.ITEM.sunny;
+  const body = skin.body === 'glitch' ? '#ff4fa3' : skin.body;
+  this.shake = 0.3;
+  switch (look.death) {
+    case 'confetti': for (const c of ['#ff7aa8', '#ffcb3d', '#6fdc98', '#8ed0ff', '#9d74ff']) this.burst(e.x, e.y, 8, c, 320, 1.1, 'square'); break;
+    case 'pixels': this.burst(e.x, e.y, 34, body, 220, 0.9, 'square'); this.glitch = 0.15; break;
+    case 'oof': this.burst(e.x, e.y, 16, body, 220, 0.6); this.parts.push({ x: e.x, y: e.y - 20, vx: 0, vy: -40, life: 1, max: 1, color: '#fffaf2', size: 26, kind: 'text', text: 'OOF', g: 0 }); break;
+    case 'soul': this.burst(e.x, e.y, 14, body, 200, 0.6); this.parts.push({ x: e.x, y: e.y - 6, vx: 0, vy: -70, life: 1.1, max: 1.1, color: 'rgba(240,244,255,0.9)', size: 9, kind: 'soul', g: 0 }); break;
+    case 'nope': this.burst(e.x, e.y, 20, body, 240, 0.7); this.parts.push({ x: e.x, y: e.y - 20, vx: 0, vy: -30, life: 1.2, max: 1.2, color: '#ff4f6e', size: 20, kind: 'text', text: 'I QUIT', g: 0 }); this.glitch = 0.2; break;
+    default: this.burst(e.x, e.y, 26, body, 260, 0.8); this.burst(e.x, e.y, 10, this.pal.ink, 200, 0.6);
+  }
+};
+
+R.drawCoin = function (ctx, cn, i) {
+  const t = this.time + i * 0.7, wob = Math.abs(Math.cos(t * 3)), y = cn.y + Math.sin(t * 2.5) * 3;
+  ctx.fillStyle = '#d9a514'; ctx.beginPath(); ctx.ellipse(cn.x, y + 1.5, 9 * wob + 1.5, 9, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.ellipse(cn.x, y, 9 * wob + 1, 9, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#3b2a40'; ctx.lineWidth = 2; ctx.stroke();
+  if (wob > 0.5) { ctx.fillStyle = '#3b2a40'; ctx.fillRect(cn.x - 3.5 * wob, y - 2, 2, 2); ctx.fillRect(cn.x + 1.5 * wob, y - 2, 2, 2); ctx.fillRect(cn.x - 2.5 * wob, y + 3, 5 * wob, 1.5); }
 };
 
 // ---------- frame ----------
@@ -125,6 +148,7 @@ R.draw = function (dt, opts) {
   this.drawCheckpoint(ctx, w);
   w.L.mimics.forEach((m, i) => { if (m.x > this.cam - 60 && m.x < this.cam + VW + 60) this.drawMimic(ctx, w, m, i); });
   for (const th of w.teeth) this.drawTooth(ctx, th);
+  L.coins.forEach((cn, i) => { if (!w.coinsGot.has(i) && cn.x > this.cam - 30 && cn.x < this.cam + VW + 30) this.drawCoin(ctx, cn, i); });
   for (const lg of w.lunge) if (lg.x > this.cam - 40 && lg.x < this.cam + VW + 40) this.drawLunger(ctx, lg);
   for (const s of L.signs) if (s.x > this.cam - 60 && s.x < this.cam + VW + 60) this.drawSign(ctx, s);
   this.drawDoor(ctx, w);
@@ -557,23 +581,17 @@ R.drawPlayer = function (ctx, w) {
   }
   // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.beginPath(); ctx.ellipse(cx, by + 1, 11, 3, 0, 0, 7); ctx.fill();
-  // sprout
-  ctx.strokeStyle = '#3fa968'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cx, cy - ry + 2); ctx.quadraticCurveTo(cx - 1, cy - ry - 6, cx + 1, cy - ry - 8); ctx.stroke();
-  ctx.fillStyle = '#6dd08b'; ctx.beginPath(); ctx.ellipse(cx + 5, cy - ry - 8, 5, 3, -0.4, 0, 7); ctx.fill();
-  // body
-  ctx.fillStyle = pal.body; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill();
-  ctx.strokeStyle = pal.ink; ctx.lineWidth = 2.5; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(cx - 5, cy - 6, 4, 2.5, -0.5, 0, 7); ctx.fill();
-  // eyes look where you go
-  const ex = p.face * 3.5, ey = Math.max(-2, Math.min(2, p.vy / 300));
-  ctx.fillStyle = pal.ink;
-  const blink = (this.time % 3.4) < 0.1;
-  for (const o of [-4.5, 4.5]) {
-    if (blink) ctx.fillRect(cx + ex + o - 2.5, cy - 2 + ey, 5, 1.8);
-    else { ctx.beginPath(); ctx.ellipse(cx + ex + o, cy - 2 + ey, 2.3, 3.4, 0, 0, 7); ctx.fill(); }
+  const look = SL.look || {};
+  SL.drawBlob(ctx, { cx, by, sq: p.sq, face: p.face, vy: p.vy, time: this.time, ink: pal.ink, skin: look.skin, hat: look.hat });
+  // trail
+  const moving = Math.abs(p.vx) > 60 || !p.grounded;
+  this.trailT = (this.trailT || 0) - 1;
+  if (moving && look.trail && look.trail !== 'dust' && this.trailT <= 0) {
+    this.trailT = look.trail === 'rainbow' ? 0 : 2;
+    const q = SL.trailPart(look.trail, cx - p.face * 8, by, this.time);
+    if (q) this.parts.push(q);
   }
-  ctx.fillStyle = 'rgba(255,110,140,0.5)';
-  ctx.beginPath(); ctx.ellipse(cx + ex - 8, cy + 4, 2.6, 1.6, 0, 0, 7); ctx.ellipse(cx + ex + 8, cy + 4, 2.6, 1.6, 0, 0, 7); ctx.fill();
+  void sx; void sy; void rx;
 };
 
 R.drawParts = function (ctx, dt) {
@@ -587,6 +605,17 @@ R.drawParts = function (ctx, dt) {
       const s = q.size * (0.5 + a * 0.5);
       ctx.beginPath(); ctx.moveTo(q.x, q.y - s); ctx.lineTo(q.x + s * 0.3, q.y - s * 0.3); ctx.lineTo(q.x + s, q.y); ctx.lineTo(q.x + s * 0.3, q.y + s * 0.3);
       ctx.lineTo(q.x, q.y + s); ctx.lineTo(q.x - s * 0.3, q.y + s * 0.3); ctx.lineTo(q.x - s, q.y); ctx.lineTo(q.x - s * 0.3, q.y - s * 0.3); ctx.closePath(); ctx.fill();
+    } else if (q.kind === 'ring') {
+      ctx.strokeStyle = q.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(q.x, q.y, q.size, 0, 7); ctx.stroke();
+    } else if (q.kind === 'heart') {
+      const z = q.size * 0.5; ctx.beginPath(); ctx.moveTo(q.x, q.y + z * 1.6); ctx.bezierCurveTo(q.x - z * 2.4, q.y, q.x - z, q.y - z * 1.6, q.x, q.y - z * 0.4); ctx.bezierCurveTo(q.x + z, q.y - z * 1.6, q.x + z * 2.4, q.y, q.x, q.y + z * 1.6); ctx.fill();
+    } else if (q.kind === 'square') {
+      ctx.fillRect(q.x - q.size / 2, q.y - q.size / 2, q.size, q.size);
+    } else if (q.kind === 'text') {
+      ctx.font = `700 ${q.size}px Fredoka, sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#3b2a40'; ctx.strokeText(q.text, q.x, q.y); ctx.fillText(q.text, q.x, q.y); ctx.textAlign = 'left';
+    } else if (q.kind === 'soul') {
+      ctx.beginPath(); ctx.arc(q.x, q.y, 9, Math.PI, 0); ctx.lineTo(q.x + 9, q.y + 10); for (let i = 0; i < 3; i++) { ctx.lineTo(q.x + 6 - i * 6, q.y + 6); ctx.lineTo(q.x + 3 - i * 6, q.y + 10); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#3b2a40'; ctx.fillRect(q.x - 4, q.y - 2, 2, 3); ctx.fillRect(q.x + 2, q.y - 2, 2, 3);
     } else { ctx.beginPath(); ctx.arc(q.x, q.y, q.size * a, 0, 7); ctx.fill(); }
     keep.push(q);
   }

@@ -37,6 +37,9 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
   51+ four or five (plus the mode bonus). New cheats are introduced one per level. Respawn is instant.
 - **Mobile**: multi-touch controls (slide a finger between buttons), a zoomed-in view when held upright, corner
   controls in landscape, fullscreen and landscape lock on Play where the browser allows. `?touch=1` forces touch UI.
+- **Spite Coins, shop and trophies** (`js/cosmetics.js`): coins come from clearing levels (Hard ×1.5, Rage ×2.5),
+  coins placed in risky spots, deathless clears, trophies, and pity coins every 50 deaths. They buy skins, hats,
+  trails and death effects. Some items only come from trophies. Cosmetic only: nothing changes how a level plays.
 - **Behaviour tracking, no AI** (`js/profile.js`): counts jumps, standing still, sign trust, checkpoint use and
   death causes. The Cheat Director weights cheats by those habits. The Dossier screen shows what it sees.
 - **Cheat Sheet**: a cheat is "spotted" when it triggers on you and "cracked" when you beat it on purpose.

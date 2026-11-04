@@ -394,3 +394,60 @@ body.touchy.portrait #cv { border-radius: 14px; }
   .panel h2 { font-size: 24px; }
 }
 body.touchy .toasts { bottom: auto; top: 44px; }
+
+/* ---------- coins, shop, trophies ---------- */
+.chip.coin { background: #fff4c2; align-items: center; gap: 5px; }
+.chip.coin svg { width: 14px; height: 14px; }
+.chip.coin.bump { animation: bump .4s; }
+.shop-btn svg { width: 18px; height: 18px; }
+#s-shop, #s-trophies { z-index: 20; }
+.toast.coin { background: #fff4c2; }
+.toast.trophy { background: var(--yellow); }
+.toast.trophy small, .toast.coin small { color: var(--ink); }
+.shop { width: min(820px, 100%); }
+.shop .panel-h { align-items: center; }
+.shop .panel-h > div:first-child { flex: 1; }
+.wallet { display: flex; align-items: center; gap: 6px; background: #fff4c2; border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 12px; box-shadow: 0 3px 0 var(--ink); font-size: 20px; }
+.wallet svg { width: 18px; height: 18px; }
+.shop-say { margin: 10px 0 12px; font-style: italic; color: var(--ink-2); min-height: 1.3em; }
+.shop-say.pop { animation: bump .35s; color: var(--ink); }
+.seg.tabs { background: var(--paper-2); }
+.seg.tabs button { color: var(--ink); }
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-top: 12px; max-height: min(52vh, 460px); overflow-y: auto; padding: 2px 2px 6px; }
+.item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 10px;
+  background: #fff; border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 0 3px 0 var(--ink);
+  transition: transform .08s;
+}
+.item:hover { transform: translateY(-2px); }
+.item:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+.item canvas, .item .fx-ico { width: 72px; height: 72px; border-radius: 12px; background: linear-gradient(180deg, #bfe7ff, #fff1f7); }
+.item .fx-ico { display: grid; place-items: center; font-size: 26px; font-weight: 700; color: var(--ink); }
+.item b { font-size: 15px; font-weight: 600; text-align: center; }
+.item .tag { font-size: 12px; color: var(--ink-2); text-align: center; line-height: 1.2; }
+.item .tag i { font-style: normal; font-family: var(--mono); background: #fff4c2; border: 1.5px solid var(--ink); border-radius: 8px; padding: 1px 7px; color: var(--ink); }
+.item.own .tag { color: #2f8a55; font-weight: 600; }
+.item.on { background: #eafff1; border-color: #2f8a55; box-shadow: 0 3px 0 #2f8a55; }
+.item.locked { opacity: 0.7; }
+.item.locked canvas { filter: grayscale(0.8) brightness(0.9); }
+.item.troll { background: var(--paper-2); }
+.item.troll .fx-ico { background: repeating-linear-gradient(45deg, #ffe6ea 0 8px, #fff 8px 16px); }
+.pay { margin: 14px 0 4px; border: 2.5px dashed var(--ink); border-radius: 14px; padding: 8px 12px; background: #fffbe8; }
+.pay div { display: flex; justify-content: space-between; font-size: 14px; padding: 1px 0; }
+.pay b { font-family: var(--mono); }
+.pay .pay-total { border-top: 2px solid var(--ink); margin-top: 4px; padding-top: 5px; font-size: 17px; font-weight: 700; }
+.trophies { width: min(720px, 100%); }
+.tro-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; max-height: min(60vh, 520px); overflow-y: auto; padding: 2px; }
+.trophy { display: flex; align-items: center; gap: 10px; background: var(--paper-2); border: 2.5px solid var(--ink); border-radius: 14px; padding: 6px 10px 6px 6px; opacity: 0.75; }
+.trophy.on { background: #fff4c2; opacity: 1; }
+.trophy .ti { width: 40px; height: 40px; flex: none; border: 2px solid var(--ink); border-radius: 10px; display: grid; place-items: center; background: #fff; }
+.trophy .ti svg { width: 30px; height: 30px; }
+.trophy > div:nth-child(2) { flex: 1; display: flex; flex-direction: column; }
+.trophy b { font-size: 15px; }
+.trophy span { font-size: 13px; color: var(--ink-2); }
+.trophy em { font-style: normal; font-size: 11px; font-family: var(--mono); text-align: right; max-width: 90px; }
+@media (max-height: 520px) {
+  .items { max-height: 46vh; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+  .item canvas, .item .fx-ico { width: 56px; height: 56px; }
+  .tro-list { max-height: 58vh; }
+}

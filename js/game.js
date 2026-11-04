@@ -35,6 +35,7 @@ function World(L, history) {
   this.cpReal = false;
   this.respawnAt = { x: L.start.x - PW / 2, y: L.start.y - PH };
   this.revealed = new Set();
+  this.coinsGot = new Set(); // coins stay grabbed through deaths; banked when you clear
   this.seen = {};
   this.discovered = {};
   this.attempt = 0;
@@ -356,6 +357,13 @@ W.hazards = function (dt) {
       if (code === TC.FALSE && !L.forks.some(f => c * T >= f.trapX0 && c * T < f.trapX1)) { this.discover('falseFloor'); break; }
       if (SL.isSolid(code)) break;
     }
+  }
+
+  // Spite Coins
+  for (let i = 0; i < L.coins.length; i++) {
+    if (this.coinsGot.has(i)) continue;
+    const cn = L.coins[i];
+    if (overlap(pr, { x: cn.x - 10, y: cn.y - 10, w: 20, h: 20 })) { this.coinsGot.add(i); this.emit('coin', { x: cn.x, y: cn.y, n: this.coinsGot.size }); }
   }
 
   // Sawblades

@@ -60,6 +60,7 @@ const S = {
   seen: () => { tone(220, 330, 0.18, 'triangle', 0.12); tone(233, 349, 0.18, 'triangle', 0.08, 0.02); },
   click: () => tone(660, 660, 0.04, 'square', 0.06),
   blip: () => tone(420 + Math.random() * 120, 400, 0.025, 'square', 0.025),
+  coin: () => { tone(988, 988, 0.06, 'square', 0.08); tone(1319, 1319, 0.12, 'square', 0.08, 0.06); },
   head: () => tone(240, 180, 0.06, 'square', 0.07)
 };
 A.play = name => { try { if (A.on && S[name]) S[name](); } catch (e) { /* audio is optional */ } };

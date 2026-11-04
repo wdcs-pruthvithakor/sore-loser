@@ -86,6 +86,10 @@ SL.VOICE = {
     broken: ['...', 'again.', 'you again.']
   },
   allCracked: 'You know every single one. Fine. I will just use them all at once.',
+  pity: ['{n} deaths. Here, 10 coins. Stop crying.', 'Pity payment. Do not tell anyone I did this.', 'Take these coins and please, please leave.', '{n} deaths! Have a participation coin. Ten of them.'],
+  broke: ['You are {n} coins short. Try dying less. Or more. I do not care.', 'Broke! {n} more coins.', 'Come back with {n} more coins, loser.'],
+  bought: ['Pleasure doing business. You still lose, though.', 'Looks great. The spikes will love it.', 'Sold! No refunds. Ever.', 'Stylish. Still dying, but stylish.'],
+  shopHello: ['Welcome to my shop. Everything is overpriced.', 'Spend your Spite Coins. Then go lose some more.', 'Look nice while you fail. That is the dream.'],
   newRun: ['A new run! Same old me.', 'Starting over? I kept your file.']
 };
 
