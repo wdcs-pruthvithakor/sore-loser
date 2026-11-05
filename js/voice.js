@@ -106,7 +106,11 @@ SL.VOICE = {
   boughtCons: ['Items! For people who cannot win alone.', 'Sold. I will remember this.', 'Enjoy your little crutch.'],
   coinsLost: ['Butterfingers! Drop your coins.', 'Your coins! Gone. Hehe.'],
   shareQuote: ['you again.', 'stop sharing this.', 'it was rigged. by me.', 'I let you win. (I did not.)'],
-  newRun: ['A new run! Same old me.', 'Starting over? I kept your file.']
+  levelQuote: ['That level was supposed to be the last one.', 'I am filing a complaint.', 'Lucky. Extremely lucky.', 'I let that happen. (I did not.)'],
+  profileQuote: ['This person will not stop playing.', 'My least favourite player.', 'Please take them away.', 'I have a file on them. It is very long.'],
+  caughtRestored: ['You changed my numbers.', 'I put them back.', 'I am always watching the save file. Times caught: {n}.'],
+  caughtModified: ['These numbers are not yours.', 'I cannot undo it this time. So I wrote MODIFIED on everything.', 'Everyone will know. Times caught: {n}.'],
+    newRun: ['A new run! Same old me.', 'Starting over? I kept your file.']
 };
 
 SL.say = function (pool, vars) {

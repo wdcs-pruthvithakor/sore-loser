@@ -60,6 +60,20 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
 - **Level 100 and New Game+**: level 100 is a boss fight against the Game (pull its three plugs). Beating it unlocks
   NG+, which restarts at level 1 with +1 cheat, meaner layouts, bigger pay, and remixed rules (NG+1: Cold Feet and
   Shouting Signs flip; NG+2: Mimic and Backwards Flag flip). It repeats forever.
+- **Audio** (`js/audio.js`): every sound and all music is synthesized live with WebAudio. No recorded audio.
+  A small composer builds a track per world (key, scale, chord progression and melody from a seed): cute
+  worlds play major, grim worlds minor, evil worlds phrygian/harmonic minor; Rage plays faster, the boss
+  has its own track, and menace speeds the music up and adds wrong notes.
+- **Settings**: music and sound volume, screen shake, flashes/glitches, narrator, and save codes
+  (tamper-checked; a loaded save is stamped IMPORTED on share cards and its Daily streak resets, so shared
+  saves are worthless for bragging). Every save has a permanent Player ID shown on its cards.
+- **Tamper check**: saves are written with a fingerprint plus a fingerprinted copy of the last honest save.
+  Editing the save in browser storage brings the honest copy back with an "I SAW THAT." scene; editing both
+  copies keeps the save but stamps it MODIFIED on every share card. It stops casual editing only (the formula
+  is in the client), and Times caught is shown in the Dossier.
+- **Gradual unlocks**: a new player sees only Play; Cheat Sheet, Shop, Trophies, Daily, modes and Pacts
+  unlock over the first levels with a line from the narrator.
+- **Share cards**: 1080×1080 images for the Daily, any cleared level, and your profile (from the Dossier).
 - **Behaviour tracking, no AI** (`js/profile.js`): counts jumps, standing still, sign trust, checkpoint use and
   death causes. The Cheat Director weights cheats by those habits. The Dossier screen shows what it sees.
 - **Cheat Sheet**: a cheat is "spotted" when it triggers on you and "cracked" when you beat it on purpose.

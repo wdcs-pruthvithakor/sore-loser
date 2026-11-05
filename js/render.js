@@ -205,6 +205,7 @@ R.event = function (e) {
     case 'lunge': this.dust(e.x, e.y, 8); break;
     case 'wallWake': this.glitch = 0.25; break;
     case 'quake': this.shake = 0.45; break;
+    case 'slam': this.shake = Math.max(this.shake, 0.12); this.dust(e.x, e.y, 8); break;
     case 'unplug': this.shake = 0.5; this.glitch = 0.4; this.burst(e.x, e.y - 10, 24, '#ffd84d', 300, 0.8, 'star'); break;
     case 'bossSaw': this.glitch = 0.08; break;
     case 'bubblePop': this.burst(e.x, e.y, 18, 'rgba(150,220,255,0.9)', 220, 0.6, 'ring'); this.shake = 0.2; break;
@@ -253,6 +254,9 @@ R.draw = function (dt, opts) {
     this.cam += (target - this.cam) * Math.min(1, dt * 6);
   }
   let sx = 0, sy = 0;
+  const FX = SL.FX || { shake: true, flashes: true };
+  if (!FX.shake) this.shake = 0;
+  if (!FX.flashes) this.glitch = 0;
   if (this.shake > 0) { this.shake -= dt; sx = (Math.random() - 0.5) * 8 * this.shake / 0.3; sy = (Math.random() - 0.5) * 8 * this.shake / 0.3; }
   if (L.twist === 'shaky') { sx += (Math.random() - 0.5) * 1.6; sy += (Math.random() - 0.5) * 1.6; }
   if (L.twist === 'mirror') ctx.setTransform(-this.k, 0, 0, this.k, this.cv.width, 0);
@@ -303,7 +307,7 @@ R.draw = function (dt, opts) {
   }
   const ambient = (tier >= 2 || (this.menace || 0) >= 3) && Math.random() < [0, 0, 0.002, 0.006, 0.012][tier] + Math.max(0, (this.menace || 0) - 3) * 0.003;
   if (ambient) this.glitch = Math.max(this.glitch, 0.06);
-  if (this.glitch > 0) { this.glitch -= dt; this.drawGlitch(ctx); }
+  if (this.glitch > 0 && !(SL.FX && SL.FX.flashes === false)) { this.glitch -= dt; this.drawGlitch(ctx); }
   const vg = ctx.createRadialGradient(VW / 2, VH / 2, VH * 0.35, VW / 2, VH / 2, VW * 0.65);
   vg.addColorStop(0, 'rgba(0,0,0,0)');
   const mn = this.menace || 0;
@@ -369,7 +373,7 @@ R.drawSky = function (ctx, pal, tier) {
   // lightning at high menace
   if (m >= 4 || this.themeId === 'storm') {
     this.boltT = (this.boltT === undefined ? 3 : this.boltT) - 1 / 60;
-    if (this.boltT <= 0) { this.boltT = Math.max(1.5, 9 - m) + Math.random() * 4; this.flash = 0.18; }
+    if (this.boltT <= 0) { this.boltT = Math.max(1.5, 9 - m) + Math.random() * 4; this.flash = (SL.FX && SL.FX.flashes === false) ? 0.04 : 0.18; if (SL.Audio && this.w && !this.attract) setTimeout(() => SL.Audio.play('thunder'), 200 + Math.random() * 500); }
     if (this.flash > 0) { this.flash -= 1 / 60; ctx.fillStyle = `rgba(255,240,255,${this.flash * 2})`; ctx.fillRect(0, 0, VW, VH); }
   }
 };

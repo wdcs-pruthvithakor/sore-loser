@@ -231,6 +231,7 @@ SL.TROPHIES = [
   { id: 'grab500', name: 'Dragon Hoard', desc: 'Grab 500 coins inside levels.', coins: 300, test: s => s.stats2.grabbed >= 500 },
   { id: 'box50', name: 'Problem Gambler', desc: 'Open 50 Grudge Boxes.', coins: 300, test: s => (s.stats2.boxes || 0) >= 50 },
   { id: 'speed20', name: 'Blink', desc: 'Clear a level in under 20 seconds.', coins: 150, test: s => s.stats2.fastest > 0 && s.stats2.fastest < 20 },
+  { id: 'caught', name: 'Caught Red-Handed', desc: 'Get caught editing your save. It noticed.', coins: 0, test: s => (s.caught || 0) >= 1 },
   { id: 'everything', name: 'Completionist', desc: 'Own every cosmetic in the game.', coins: 5000, test: s => SL.ITEMS.every(i => i.free || s.owned.indexOf(i.id) >= 0) }
 ];
 

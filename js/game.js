@@ -89,6 +89,7 @@ W.reset = function () {
   this.wall = { on: false, x: -1e9 };
   this.quakeT = 2.5;
   this.crumbled = new Map(); // tile -> seconds left before it drops (<= 0: gone)
+  this.spawnSafe = 0.8; // a beat after respawning where moving hazards cannot get you
   this.bossState = L.boss ? { pressed: L.switches.map(() => false), toothT: 2, sawT: 3.5, saws: [], hurt: 0 } : null;
   this.attempt++;
   this.platMove(0);
@@ -119,6 +120,7 @@ W.platMove = function (dt) {
 W.die = function (cause) {
   const p = this.p;
   if (!p.alive || this.won || this.invuln > 0) return;
+  if (this.spawnSafe > 0 && ['spikeWall', 'crusher', 'saw', 'wave', 'boss', 'copycat', 'lunger', 'ceilingTeeth'].indexOf(cause) >= 0) return;
   // Bubble consumable: pops instead of you, and puts you back on the last safe ground
   if (this.shield > 0) {
     this.shield--; this.invuln = 1.2;
@@ -168,6 +170,7 @@ W.update = function (dt, input) {
   this.stats.time += dt;
   this.lifeT += dt;
   if (this.invuln > 0) this.invuln -= dt;
+  if (this.spawnSafe > 0) this.spawnSafe -= dt;
 
   // ----- horizontal (Wrong Way swaps the keys) -----
   let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -422,6 +425,9 @@ W.hazards = function (dt) {
   // Crushers (Hard): slam down fast, hold, then grind back up
   for (const cr of L.crushers) {
     const y = SL.crusherY(cr, this.t);
+    const down = y >= cr.floor - 41;
+    if (down && !cr._down && Math.abs(cr.x - p.x) < 520) this.emit('slam', { x: cr.x + cr.w / 2, y: cr.floor });
+    cr._down = down;
     if (overlap(pr, { x: cr.x + 3, y: cr.top, w: cr.w - 6, h: y + 40 - cr.top })) return this.die('crusher');
   }
 

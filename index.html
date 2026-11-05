@@ -9,10 +9,11 @@
 <meta name="description" content="A cute little platformer that cheats. It moves the exit, lies on its signs and fakes its spikes, but every cheat follows a rule. Learn the rules, then beat it.">
 <meta name="theme-color" content="#1c1226">
 <link rel="preload" href="fonts/Fredoka-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=15">
+<link rel="stylesheet" href="css/style.css?v=21">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='24' rx='7' fill='%23ffcb3d' stroke='%233b2a40' stroke-width='2.5'/%3E%3Ccircle cx='11' cy='15' r='2.5' fill='%233b2a40'/%3E%3Cpath d='M18 13l5 2-5 2' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3Cpath d='M10 21q6 4 12-1' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
+<div id="caught" class="caught-overlay" hidden aria-live="assertive"><b>I SAW THAT.</b></div>
 <div id="app">
   <div id="stage">
     <canvas id="cv" aria-label="Sore Loser game view"></canvas>
@@ -85,7 +86,7 @@
         </div>
         <button type="button" class="btn ghost small" id="t-new">New run</button>
       </div>
-      <div class="diff-pick" role="group" aria-label="Difficulty">
+      <div class="diff-pick" id="t-diff-wrap" role="group" aria-label="Difficulty">
         <div class="seg" id="t-diff">
           <button type="button" data-d="normal" aria-pressed="true">Normal</button>
           <button type="button" data-d="hard" aria-pressed="false">Hard</button>
@@ -104,7 +105,10 @@
         <div><dt>Seed</dt><dd id="t-seed">-----</dd></div>
       </dl>
       <p class="keys touch-hide"><kbd>←</kbd><kbd>→</kbd> move &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>R</kbd> restart &nbsp; <kbd>C</kbd> cheat sheet &nbsp; <kbd>Esc</kbd> pause</p>
-      <button type="button" class="sound-btn" id="t-sound" aria-pressed="true">Sound on</button>
+      <div class="title-foot">
+        <button type="button" class="sound-btn" id="t-sound" aria-pressed="true">Sound on</button>
+        <button type="button" class="sound-btn" id="t-settings">Settings</button>
+      </div>
     </div>
   </section>
 
@@ -147,6 +151,7 @@
           <dl id="d-stats" class="dstats"></dl>
         </div>
       </div>
+      <div class="menu-row"><button type="button" class="btn primary" id="d-share">Share my profile card</button></div>
       <p class="panel-foot">Built from counters only: how often you jump, wait, trust signs, use flags and die. The next level is picked from this.</p>
     </div>
   </section>
@@ -192,7 +197,7 @@
       <header class="panel-h">
         <div>
           <p class="eyebrow">Brag, or confess</p>
-          <h2>Your Daily card</h2>
+          <h2 id="card-title">Your Daily card</h2>
         </div>
         <button type="button" class="x" data-close aria-label="Close">×</button>
       </header>
@@ -207,7 +212,36 @@
     </div>
   </section>
 
-    <!-- Ending -->
+    <!-- Settings -->
+  <section id="s-settings" class="screen" hidden>
+    <div class="panel settings">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">Adjust your suffering</p>
+          <h2>Settings</h2>
+        </div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <div class="set-grid">
+        <label class="set-row"><span>Music</span><input type="range" id="set-music" min="0" max="100" step="1"></label>
+        <label class="set-row"><span>Sound effects</span><input type="range" id="set-sfx" min="0" max="100" step="1"></label>
+        <label class="set-row toggle"><span>Screen shake</span><input type="checkbox" id="set-shake"><i></i></label>
+        <label class="set-row toggle"><span>Flashes and glitches<small>Lightning, glitch effects and flicker</small></span><input type="checkbox" id="set-flashes"><i></i></label>
+        <label class="set-row toggle"><span>Narrator<small>The Game's comments. It will still judge you silently.</small></span><input type="checkbox" id="set-narrator"><i></i></label>
+      </div>
+      <h3>Save code</h3>
+      <p class="panel-foot">Your progress lives in this browser. A save code is a backup: paste it into another browser to carry on there. Codes cannot be edited, and a loaded save is marked IMPORTED on its share cards (and its Daily streak resets), so borrowing someone's progress gets you nothing to brag about.</p>
+      <textarea id="set-code" class="set-code" rows="3" placeholder="Paste a save code here to load it" spellcheck="false"></textarea>
+      <div class="menu-row">
+        <button type="button" class="btn" id="set-export">Copy my save code</button>
+        <button type="button" class="btn" id="set-import">Load save code</button>
+      </div>
+      <p class="card-note" id="set-note" aria-live="polite"></p>
+      <p class="panel-foot">All music and sound is generated live by the game. No recorded audio is used.</p>
+    </div>
+  </section>
+
+  <!-- Ending -->
   <section id="s-end" class="screen" hidden>
     <div class="panel ending">
       <p class="eyebrow">Level 100</p>
@@ -283,20 +317,23 @@
         </div>
         <div class="p-items" id="p-items"></div>
         <p class="p-items-note" id="p-items-note"></p>
-        <button type="button" class="btn small" id="p-sound" aria-pressed="true">Sound on</button>
+        <div class="menu-row">
+          <button type="button" class="btn small" id="p-sound" aria-pressed="true">Sound on</button>
+          <button type="button" class="btn small" id="p-settings">Settings</button>
+        </div>
         <button type="button" class="btn ghost small" id="p-title">Quit to title</button>
       </div>
     </div>
   </section>
 </div>
 
-<script src="js/core.js?v=15"></script>
-<script src="js/profile.js?v=15"></script>
-<script src="js/game.js?v=15"></script>
-<script src="js/voice.js?v=15"></script>
-<script src="js/audio.js?v=15"></script>
-<script src="js/cosmetics.js?v=15"></script>
-<script src="js/render.js?v=15"></script>
-<script src="js/main.js?v=15"></script>
+<script src="js/core.js?v=21"></script>
+<script src="js/profile.js?v=21"></script>
+<script src="js/game.js?v=21"></script>
+<script src="js/voice.js?v=21"></script>
+<script src="js/audio.js?v=21"></script>
+<script src="js/cosmetics.js?v=21"></script>
+<script src="js/render.js?v=21"></script>
+<script src="js/main.js?v=21"></script>
 </body>
 </html>

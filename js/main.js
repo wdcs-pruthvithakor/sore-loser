@@ -15,14 +15,46 @@ function fresh() {
     xp: 0, rankSeen: 1, mastery: {}, inv: {}, dyes: [], boxPity: 0, pacts: {}, ng: 0, daily: null, streak: 0, lastDaily: null, profile: SL.Profile.blank(), history: { bonks: 0, crumbleSurvive: 0, causes: {} }, cur: null, last: [], allCrackedSaid: false
   };
 }
+// ---------- tamper check ----------
+// Every save is written with a fingerprint, plus a second fingerprinted copy of the last honest save.
+// If someone edits the save in their browser's storage, the fingerprint stops matching: the honest copy
+// comes back and the Game lets them know it noticed. If both copies were edited, the save is kept but
+// stamped MODIFIED. It stops casual editing; the formula is in this file, so it is not real security.
+const CODE_SALT = 'sore-loser:grudge:v2';
+const fingerprint = json => (SL.hashStr(CODE_SALT + json) ^ SL.hashStr(json + json.length + CODE_SALT)).toString(36);
+const KEY_FP = KEY + '_fp', KEY_GOOD = KEY + '_good', KEY_GOOD_FP = KEY + '_good_fp';
+let tamper = null; // 'restored' | 'modified' | null
+function writeSave(obj) {
+  const json = JSON.stringify(obj), fp = fingerprint(json);
+  localStorage.setItem(KEY, json); localStorage.setItem(KEY_FP, fp);
+  localStorage.setItem(KEY_GOOD, json); localStorage.setItem(KEY_GOOD_FP, fp);
+}
 function load() {
   try {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.v === 1) return Object.assign(fresh(), s);
+    const json = localStorage.getItem(KEY);
+    if (!json) return fresh();
+    const s = JSON.parse(json);
+    if (!s || s.v !== 1) return fresh();
+    const fp = localStorage.getItem(KEY_FP);
+    if (fp === null) return Object.assign(fresh(), s); // saves from before fingerprints: trusted once
+    if (fingerprint(json) === fp) return Object.assign(fresh(), s);
+    // edited: bring back the last honest copy if it is intact
+    const good = localStorage.getItem(KEY_GOOD), goodFp = localStorage.getItem(KEY_GOOD_FP);
+    if (good && goodFp && fingerprint(good) === goodFp) {
+      const g = JSON.parse(good);
+      g.caught = (g.caught || 0) + 1;
+      tamper = 'restored';
+      return Object.assign(fresh(), g);
+    }
+    // both copies edited: keep it, but it is marked forever
+    tamper = 'modified';
+    s.modified = true; s.caught = (s.caught || 0) + 1;
+    return Object.assign(fresh(), s);
   } catch (e) { /* storage blocked or corrupt */ }
   return fresh();
 }
 let save = load();
+try { if (localStorage.getItem(KEY) && localStorage.getItem(KEY_FP) === null) persist(); } catch (e) { /* storage blocked */ } // fingerprint older saves right away
 // Older saves can name cheats that were retired; drop them.
 if (!SL.DIFFS[save.diff]) save.diff = 'normal';
 save.stats2 = Object.assign({ clean: 0, hard: 0, rage: 0, maxDeathsCleared: 0, fastest: 0, twists: {}, grabbed: 0, dailies: 0, bestStreak: 0, maxPacts: 0, boxes: 0, endings: 0, maxNgBeaten: -1 }, save.stats2);
@@ -31,6 +63,10 @@ for (const k of ['skin', 'hat', 'trail', 'death', 'pin']) if (!SL.ITEM[save.equi
 if (!SL.DYE[save.equip.dye]) save.equip.dye = 'none';
 for (const k of ['mastery', 'inv', 'pacts']) if (!save[k] || typeof save[k] !== 'object') save[k] = {};
 if (!Array.isArray(save.dyes)) save.dyes = [];
+if (!save.playerId) { save.playerId = SL.newSeed() + SL.newSeed().slice(0, 3); persist(); } // stays the same forever
+save.settings = Object.assign({ music: 0.55, sfx: 0.8, shake: true, flashes: true, narrator: true }, save.settings);
+save.unlocked = save.unlocked || {};
+SL.FX = save.settings;
 // ---------- one run per difficulty ----------
 // The active run lives in the top-level fields; the other modes' runs wait in save.runs.
 const RUN_FIELDS = ['runSeed', 'level', 'best', 'cur', 'last', 'ng', 'runAssisted'];
@@ -55,7 +91,7 @@ SL.look = save.equip;
 const owns = id => { const it = SL.ITEM[id]; return !!it && (it.free || save.owned.indexOf(id) >= 0); };
 save.last = (save.last || []).filter(id => SL.CHEATS[id]);
 if (save.cur && (save.cur.cheats || []).some(id => !SL.CHEATS[id])) save.cur = null;
-function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
+function persist() { try { writeSave(save); } catch (e) { /* ignore */ } }
 const sheetOf = id => (save.sheet[id] = save.sheet[id] || { met: false, seen: false, cracked: false });
 const crackedCount = () => IDS.filter(id => save.sheet[id] && save.sheet[id].cracked).length;
 
@@ -103,6 +139,7 @@ const moodForTier = t => ['happy', 'smug', 'angry', 'glitch', 'glitch'][t];
 // ---------- voice box ----------
 const voice = { q: [], cur: null, shown: 0, hold: 0, blip: 0 };
 function say(text, mood, opts) {
+  if (!save.settings.narrator && !(opts && opts.force)) return;
   opts = opts || {};
   const item = { text, mood: mood || 'happy', hold: opts.hold || 2.4, prio: opts.prio || 1 };
   if (voice.cur && item.prio > voice.cur.prio) { voice.q.unshift(item); voice.cur = null; }
@@ -174,7 +211,30 @@ let world = null, levelTime = 0, levelInfo = null, attract = null, attractCam = 
 const input = { left: false, right: false, jump: false, jumpPressed: false, down: false };
 
 function show(id, on) { $(id).hidden = !on; }
+// ---------- gradual unlocks: a new player sees Play, and the rest arrives over the first levels ----------
+const UNLOCKS = [
+  { id: 'sheet', els: ['t-sheet', 't-dossier', 't-new'], test: () => save.cleared >= 1, say: 'I keep notes on you now. Cheat Sheet and Dossier are open.' },
+  { id: 'shop', els: ['t-shop'], test: () => save.cleared >= 2 || save.coins >= 60, say: 'You have coins. I opened a shop. Everything is overpriced.' },
+  { id: 'trophies', els: ['t-trophies'], test: () => Object.keys(save.trophies).length >= 1, say: 'You earned a trophy. I made a shelf for it. Reluctantly.' },
+  { id: 'daily', els: ['t-daily'], test: () => save.cleared >= 3, say: 'Daily Grudge unlocked. One level, everyone, every day.' },
+  { id: 'modes', els: ['t-diff-wrap'], test: () => save.cleared >= 5 || save.bestAll >= 6, say: 'Hard and Rage are open. Each mode keeps its own run.' },
+  { id: 'pacts', els: ['t-pacts'], test: () => (save.bestAll || 1) >= 8, say: 'Pacts unlocked. Make it worse on purpose, earn more.' }
+];
+function applyUnlocks() {
+  for (const u of UNLOCKS) { const on = !!save.unlocked[u.id] || u.test(); for (const id of u.els) { const el = $(id); if (el) el.classList.toggle('locked-ui', !on); } }
+}
+function announceUnlocks() {
+  // saves from before unlocks existed: open everything they already earned, quietly
+  if (!save.unlockInit) { save.unlockInit = true; for (const u of UNLOCKS) if (u.test()) save.unlocked[u.id] = true; persist(); }
+  for (const u of UNLOCKS) {
+    if (save.unlocked[u.id] || !u.test()) continue;
+    save.unlocked[u.id] = true; persist();
+    if (save.cleared > 0) { toast('crack', 'Unlocked', u.say, TROPHY_ICON); say(u.say, 'smug', { hold: 2.8 }); }
+  }
+  applyUnlocks();
+}
 function refreshCounts() {
+  applyUnlocks();
   const n = crackedCount() + '/' + IDS.length;
   $('h-sheet-n').textContent = n; $('t-sheet-n').textContent = n;
   for (const id of ['t-coins', 'h-coins']) $(id).textContent = save.coins;
@@ -261,13 +321,14 @@ function setupAttract() {
   try {
     const { world: w } = makeWorld(Math.min(save.level, 99));
     attract = w; attractCam = 0;
-    R.setWorld(attract);
+    R.setWorld(attract); R.attract = true;
   } catch (e) { attract = null; }
 }
 
-const SCREENS = ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-end', 's-card'];
+const SCREENS = ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-end', 's-card', 's-settings'];
 function enterPlay(levelLabel, restart) {
-  R.setWorld(world);
+  R.setWorld(world); R.attract = false;
+  SL.Audio.music(SL.Audio.trackFor(R.themeId, world.L.diff, world.L.ng || 0, { boss: !!world.L.boss }));
   $('stage').classList.toggle('boss', !!world.L.boss);
   mode = 'play'; overlay = null;
   for (const s of SCREENS) show(s, false);
@@ -351,24 +412,27 @@ function handle(e) {
       if (world.L.level === 1 && !world.saidDown) { world.saidDown = true; say(SL.say(SL.VOICE.trigger.down), 'smug', { prio: 2 }); }
       break;
     case 'idle': quip(SL.VOICE.trigger.idle, 'smug'); break;
-    case 'dodge': SL.Audio.play('flee'); quip(SL.VOICE.trigger.dodge, 'smug'); break;
-    case 'swap': SL.Audio.play(e.on ? 'seen' : 'save'); quip(e.on ? SL.VOICE.trigger.swapOn : SL.VOICE.trigger.swapOff, e.on ? 'smug' : 'angry'); break;
-    case 'shake': SL.Audio.play('crumble'); quip(SL.VOICE.trigger.shake, 'smug'); break;
+    case 'dodge': SL.Audio.play('swap'); quip(SL.VOICE.trigger.dodge, 'smug'); break;
+    case 'swap': SL.Audio.play('swap'); quip(e.on ? SL.VOICE.trigger.swapOn : SL.VOICE.trigger.swapOff, e.on ? 'smug' : 'angry'); break;
+    case 'shake': SL.Audio.play('shake'); quip(SL.VOICE.trigger.shake, 'smug'); break;
     case 'floorDrop': SL.Audio.play('drop'); break;
     case 'wake': SL.Audio.play('seen'); if (!world.saidWake) { world.saidWake = true; say(SL.say(SL.VOICE.trigger.wake), 'smug', { prio: 2 }); } break;
     case 'tooth': SL.Audio.play('drop'); break;
-    case 'unplug': SL.Audio.play('crumble'); say(SL.say(e.left === 2 ? SL.VOICE.unplug1 : e.left === 1 ? SL.VOICE.unplug2 : SL.VOICE.unplug3), 'glitch', { prio: 3, hold: 2 }); break;
-    case 'bossTooth': SL.Audio.play('drop'); break;
-    case 'bossSaw': SL.Audio.play('flee'); break;
-    case 'bubblePop': SL.Audio.play('pop'); say('Bubble popped. Lucky.', 'angry', { prio: 2 }); break;
-    case 'plant': SL.Audio.play('save'); break;
-    case 'coinsLost': SL.Audio.play('crumble'); $('h-coins').textContent = save.coins; quip(SL.VOICE.coinsLost, 'smug'); break;
+    case 'unplug': SL.Audio.play('unplug'); say(SL.say(e.left === 2 ? SL.VOICE.unplug1 : e.left === 1 ? SL.VOICE.unplug2 : SL.VOICE.unplug3), 'glitch', { prio: 3, hold: 2 }); break;
+    case 'bossTooth': SL.Audio.play('bossTooth'); break;
+    case 'bossSaw': SL.Audio.play('bossSaw'); break;
+    case 'bubblePop': SL.Audio.play('shieldPop'); say('Bubble popped. Lucky.', 'angry', { prio: 2 }); break;
+    case 'plant': SL.Audio.play('plant'); break;
+    case 'coinsLost': SL.Audio.play('coinsLost'); $('h-coins').textContent = save.coins; quip(SL.VOICE.coinsLost, 'smug'); break;
     case 'coin': SL.Audio.play('coin'); $('h-coins').textContent = save.coins + world.coinsGot.size * 5; bumpEl('h-coin-chip'); break;
-    case 'reveal': SL.Audio.play('bonk'); quip(SL.VOICE.trigger.reveal, 'smug'); break;
-    case 'lunge': SL.Audio.play('flee'); quip(SL.VOICE.trigger.lunge, 'smug'); break;
-    case 'wallWake': SL.Audio.play('seen'); if (!world.saidWall) { world.saidWall = true; say(SL.say(SL.VOICE.trigger.wallWake), 'smug', { prio: 2 }); } break;
-    case 'quake': SL.Audio.play('crumble'); quip(SL.VOICE.trigger.quake, 'smug'); break;
+    case 'reveal': SL.Audio.play('reveal'); quip(SL.VOICE.trigger.reveal, 'smug'); break;
+    case 'lunge': SL.Audio.play('lunge'); quip(SL.VOICE.trigger.lunge, 'smug'); break;
+    case 'wallWake': SL.Audio.play('wall'); if (!world.saidWall) { world.saidWall = true; say(SL.say(SL.VOICE.trigger.wallWake), 'smug', { prio: 2 }); } break;
+    case 'quake': SL.Audio.play('quake'); quip(SL.VOICE.trigger.quake, 'smug'); break;
     case 'toothLand': SL.Audio.play('pop'); break;
+    case 'creak': SL.Audio.play('creak'); break;
+    case 'tileFall': SL.Audio.play('tileFall'); break;
+    case 'slam': SL.Audio.play('slam'); break;
     case 'seen': {
       const s = sheetOf(e.id);
       if (!s.seen) {
@@ -413,7 +477,7 @@ function addXP(n) {
     const bonus = 10 + save.rankSeen * 3;
     save.coins += bonus;
     toast('trophy', `Rank up · +${bonus} coins`, `Loser Rank ${save.rankSeen}: ${SL.rankOf(save.xp).title}`, TROPHY_ICON);
-    SL.Audio.play('crack');
+    SL.Audio.play('rankUp');
   }
 }
 function addMastery(cheats) {
@@ -498,7 +562,7 @@ function finishLevel(opts) {
   $('c-time').textContent = fmtTime(levelTime);
   $('c-deaths').textContent = deaths; $('c-jumps').textContent = jumps;
   $('c-pay').innerHTML = pay.rows.map(([k, v]) => `<div><span>${k}</span><b>${v < 0 ? v : '+' + v}</b></div>`).join('') + `<div class="pay-total"><span>Spite Coins${assisted && !opts.skipped ? ' · Assisted' : ''}</span><b>+${pay.total}</b></div>`;
-  setTimeout(() => checkTrophies(save.totalDeaths), 400);
+  setTimeout(() => { checkTrophies(save.totalDeaths); announceUnlocks(); }, 400);
   $('c-used').innerHTML = '';
   for (const id of L.cheats) {
     const sh = sheetOf(id), C = SL.CHEATS[id];
@@ -510,7 +574,8 @@ function finishLevel(opts) {
     row.querySelector('span').textContent = sh.cracked ? ruleFor(id) : met ? C.symptom + ' Rule not cracked yet.' : 'It was here. You never noticed.';
     $('c-used').appendChild(row);
   }
-  show('c-share', daily); show('c-pacts', !daily);
+  lastClear = { level: L.level, diff: L.diff, ng: L.ng || 0, deaths, time: levelTime, coins: pay.total, cheats: L.cheats.length, twist: L.twist ? SL.TWISTS[L.twist].name : '', world: SL.themeName(L.diff, L.ng || 0) };
+  show('c-share', !opts.skipped); show('c-pacts', !daily);
   $('c-next').innerHTML = daily ? 'Back to title' : (L.level + 1 === 100 ? 'Face the Game <kbd>Enter</kbd>' : 'Next level <kbd>Enter</kbd>');
   mode = 'clear';
   show('hud', false); show('touch', false);
@@ -522,88 +587,132 @@ function finishLevel(opts) {
 // The text people paste into chats after the Daily.
 // 5 squares: green is good, red is a lot of deaths.
 const gradeOf = deaths => deaths === 0 ? 'ggggg' : deaths < 5 ? 'gggyy' : deaths < 15 ? 'gyyrr' : deaths < 40 ? 'yrrrr' : 'rrrrr';
-let shareQuote = '';
-function shareText() {
-  const d = save.daily, n = dailyNumber(d.key);
-  const grade = gradeOf(d.last).replace(/g/g, '🟩').replace(/y/g, '🟨').replace(/r/g, '🟥');
-  return `Sore Loser · Daily #${n}\n💀 ${d.last}  ⏱ ${fmtTime(d.lastTime)}${save.streak > 1 ? '  🔥' + save.streak : ''}\n${grade}\n"${shareQuote}"`;
+const gradeEmoji = deaths => gradeOf(deaths).replace(/g/g, '🟩').replace(/y/g, '🟨').replace(/r/g, '🟥');
+let shareQuote = '', cardKind = 'daily', lastClear = null;
+function cardFileName() {
+  if (cardKind === 'daily') return `sore-loser-daily-${dailyNumber(save.daily.key)}.png`;
+  if (cardKind === 'level') return `sore-loser-level-${lastClear.level}-${lastClear.diff}.png`;
+  return 'sore-loser-profile.png';
+}
+function shareText() { return shareTextRaw() + (save.modified ? '\n(modified save)' : save.imported ? '\n(imported save)' : '') + '\nPlayer #' + save.playerId; }
+function shareTextRaw() {
+  if (cardKind === 'daily') {
+    const d = save.daily;
+    return `Sore Loser · Daily #${dailyNumber(d.key)}\n💀 ${d.last}  ⏱ ${fmtTime(d.lastTime)}${save.streak > 1 ? '  🔥' + save.streak : ''}\n${gradeEmoji(d.last)}\n"${shareQuote}"`;
+  }
+  if (cardKind === 'level') {
+    const c = lastClear;
+    return `Sore Loser · Level ${c.level} · ${SL.DIFFS[c.diff].name}${c.ng ? ' NG+' + c.ng : ''}\n💀 ${c.deaths}  ⏱ ${fmtTime(c.time)}  🪙 +${c.coins}\n${gradeEmoji(c.deaths)}\n"${shareQuote}"`;
+  }
+  const rk = SL.rankOf(save.xp);
+  return `Sore Loser · Loser Rank ${rk.lvl} (${rk.title})\nNormal ${bestIn('normal')} · Hard ${bestIn('hard')} · Rage ${bestIn('rage')}\n💀 ${save.totalDeaths}  🏆 ${Object.keys(save.trophies).length}/${SL.TROPHIES.length}\n"${shareQuote}"`;
 }
 
-// ---------- the share card: a 1080×1080 image of today's result ----------
+// ---------- share cards: 1080×1080 images for the Daily, any cleared level, and your profile ----------
 function drawShareCard() {
-  const d = save.daily, n = dailyNumber(d.key), S = 1080;
-  const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
-  const ctx = cv.getContext('2d'), rr = SL.rrect;
-  const pal = SL.paletteFor(SL.themeFor('hard', 0), 2, 2);
-  const ink = '#3b2a40', F = w => `${w} Fredoka, system-ui, sans-serif`;
-  // sky, hills and a spike floor in today's world
+  const S = 1080, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+  const ctx = cv.getContext('2d'), rr = SL.rrect, ink = '#3b2a40', F = w => `${w} Fredoka, system-ui, sans-serif`;
+  // the world behind the card: today's Daily world, the level's world, or your current mode's world
+  const diff = cardKind === 'daily' ? 'hard' : cardKind === 'level' ? lastClear.diff : save.diff;
+  const ng = cardKind === 'daily' ? 0 : cardKind === 'level' ? lastClear.ng : save.ng;
+  const menace = SL.menaceFor(diff, ng);
+  const pal = SL.paletteFor(SL.themeFor(diff, ng), 2, menace, SL.themeLoop(diff, ng));
+  const seed = cardKind === 'daily' ? dailyNumber(save.daily.key) : 7;
   const g = ctx.createLinearGradient(0, 0, 0, S); g.addColorStop(0, pal.skyA); g.addColorStop(1, pal.skyB);
   ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-  const glow = ctx.createRadialGradient(840, 190, 30, 840, 190, 260); glow.addColorStop(0, 'rgba(255,40,50,0.5)'); glow.addColorStop(1, 'rgba(255,40,50,0)');
-  ctx.fillStyle = glow; ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = '#c8202c'; ctx.beginPath(); ctx.arc(840, 190, 70, 0, 7); ctx.fill();
+  if (menace >= 2) { const gl = ctx.createRadialGradient(840, 190, 30, 840, 190, 260); gl.addColorStop(0, 'rgba(255,40,50,0.5)'); gl.addColorStop(1, 'rgba(255,40,50,0)'); ctx.fillStyle = gl; ctx.fillRect(0, 0, S, S); }
+  ctx.fillStyle = menace >= 2 ? '#c8202c' : pal.sun; ctx.beginPath(); ctx.arc(840, 190, 70, 0, 7); ctx.fill();
   for (const [col, base, amp, f] of [[pal.far, 700, 70, 0.006], [pal.near, 800, 60, 0.01]]) {
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, S);
-    for (let x = 0; x <= S; x += 14) { const y = base - Math.sin(x * f + n) * amp - Math.sin(x * f * 2.7 + 1) * amp * 0.35; ctx.lineTo(x - 7, y); ctx.lineTo(x - 3, y - 12); ctx.lineTo(x, y); }
+    for (let x = 0; x <= S; x += 14) { const y = base - Math.sin(x * f + seed) * amp - Math.sin(x * f * 2.7 + 1) * amp * 0.35; if (menace >= 1) { ctx.lineTo(x - 7, y); ctx.lineTo(x - 3, y - 12); } ctx.lineTo(x, y); }
     ctx.lineTo(S, S); ctx.closePath(); ctx.fill();
   }
   ctx.fillStyle = pal.dirt; ctx.fillRect(0, 990, S, 90);
   ctx.fillStyle = pal.grass; ctx.fillRect(0, 990, S, 16);
   for (let i = 0; i < 18; i++) { const x = i * 60 + 10; ctx.beginPath(); ctx.moveTo(x, 990); ctx.lineTo(x + 20, 955); ctx.lineTo(x + 40, 990); ctx.fillStyle = '#eef2fb'; ctx.fill(); ctx.strokeStyle = '#6f7591'; ctx.lineWidth = 4; ctx.stroke(); }
-  // logo
+  // logo + subtitle
   ctx.textAlign = 'center'; ctx.lineJoin = 'round';
-  const logo = (t, y, size, col) => { ctx.font = F('700 ' + size + 'px'); ctx.lineWidth = 14; ctx.strokeStyle = ink; ctx.strokeText(t, S / 2, y); ctx.fillStyle = col; ctx.fillText(t, S / 2, y); };
-  logo('SORE LOSER', 150, 120, '#ffcb3d');
-  ctx.font = F('600 40px'); ctx.fillStyle = '#fffaf2'; ctx.lineWidth = 8; ctx.strokeStyle = ink;
-  const sub = `DAILY GRUDGE #${n} · ${d.key}`; ctx.strokeText(sub, S / 2, 215); ctx.fillText(sub, S / 2, 215);
-  // the panel
+  const outlined = (t, x, y, font, col, lw) => { ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = ink; ctx.strokeText(t, x, y); ctx.fillStyle = col; ctx.fillText(t, x, y); };
+  outlined('SORE LOSER', S / 2, 150, F('700 120px'), '#ffcb3d', 14);
+  const sub = cardKind === 'daily' ? `DAILY GRUDGE #${dailyNumber(save.daily.key)} · ${save.daily.key}`
+    : cardKind === 'level' ? `LEVEL ${lastClear.level} · ${SL.DIFFS[lastClear.diff].name.toUpperCase()}${lastClear.ng ? ' NG+' + lastClear.ng : ''} · ${lastClear.world.toUpperCase()}`
+    : 'PLAYER PROFILE';
+  outlined(sub, S / 2, 215, F('600 ' + (sub.length > 44 ? 32 : 40) + 'px'), '#fffaf2', 8);
+  // panel
   ctx.fillStyle = 'rgba(28,18,38,0.35)'; rr(ctx, 96, 268, S - 192, 600, 48); ctx.fill();
-  ctx.fillStyle = '#fffaf2'; rr(ctx, 90, 258, S - 180, 600, 48); ctx.fill();
-  ctx.lineWidth = 8; ctx.strokeStyle = ink; ctx.stroke();
-  // the blob in your skin, looking smug
+  ctx.fillStyle = '#fffaf2'; rr(ctx, 90, 258, S - 180, 600, 48); ctx.fill(); ctx.lineWidth = 8; ctx.strokeStyle = ink; ctx.stroke();
   ctx.save(); ctx.translate(250, 520); ctx.scale(6, 6);
   SL.drawBlob(ctx, { cx: 0, by: 0, face: 1, time: 1, skin: save.equip.skin, hat: save.equip.hat, dye: save.equip.dye, pin: save.equip.pin });
   ctx.restore();
-  // stats
   const stat = (x, label, value, col) => {
+    ctx.textAlign = 'center';
     ctx.fillStyle = col; rr(ctx, x, 300, 200, 170, 28); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke();
     ctx.fillStyle = ink; ctx.font = F('600 28px'); ctx.fillText(label, x + 100, 345);
-    ctx.font = F('700 74px'); ctx.fillText(value, x + 100, 435);
+    ctx.font = F('700 ' + (String(value).length > 4 ? 56 : 74) + 'px'); ctx.fillText(value, x + 100, 435);
   };
-  ctx.textAlign = 'center';
-  stat(420, 'DEATHS', String(d.last), '#ffd6de');
-  stat(650, 'TIME', fmtTime(d.lastTime), '#d8f0ff');
-  // streak + grade row
-  const grade = gradeOf(d.last), cols = { g: '#6fdc98', y: '#ffcb3d', r: '#ff5a6e' };
-  for (let i = 0; i < 5; i++) { ctx.fillStyle = cols[grade[i]]; rr(ctx, 420 + i * 88, 500, 76, 76, 16); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke(); }
-  ctx.textAlign = 'left'; ctx.font = F('700 40px'); ctx.fillStyle = ink;
-  ctx.fillText(save.streak > 1 ? `${save.streak}-day streak` : 'Day one of the grudge', 420, 640);
-  ctx.font = F('500 30px'); ctx.fillStyle = '#6d5a73';
-  ctx.fillText(`${SL.DIFFS.hard.name} · ${dailyPlan().cheats.length} cheats`, 420, 684);
+  const squares = deaths => { const gr = gradeOf(deaths), cols = { g: '#6fdc98', y: '#ffcb3d', r: '#ff5a6e' }; for (let i = 0; i < 5; i++) { ctx.fillStyle = cols[gr[i]]; rr(ctx, 420 + i * 88, 500, 76, 76, 16); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke(); } };
+  const lines = (a, b) => { ctx.textAlign = 'left'; ctx.font = F('700 40px'); ctx.fillStyle = ink; ctx.fillText(a, 420, 640); ctx.font = F('500 30px'); ctx.fillStyle = '#6d5a73'; ctx.fillText(b, 420, 684); };
+  let foot;
+  if (cardKind === 'daily') {
+    const d = save.daily;
+    stat(420, 'DEATHS', d.last, '#ffd6de'); stat(650, 'TIME', fmtTime(d.lastTime), '#d8f0ff'); squares(d.last);
+    lines(save.streak > 1 ? `${save.streak}-day streak` : 'Day one of the grudge', `Hard · ${dailyPlan().cheats.length} cheats`);
+    foot = 'Same level for everyone today. Beat me.';
+  } else if (cardKind === 'level') {
+    const c = lastClear;
+    stat(420, 'DEATHS', c.deaths, '#ffd6de'); stat(650, 'TIME', fmtTime(c.time), '#d8f0ff'); squares(c.deaths);
+    lines(`+${c.coins} Spite Coins`, `${c.cheats} cheat${c.cheats === 1 ? '' : 's'} used on me${c.twist ? ' · ' + c.twist : ''}`);
+    foot = 'I beat it. The game is furious.';
+  } else {
+    const rk = SL.rankOf(save.xp);
+    stat(420, 'RANK', rk.lvl, '#fff4c2'); stat(650, 'DEATHS', save.totalDeaths, '#ffd6de');
+    // best level per mode instead of grade squares
+    const modes = [['normal', '#6fdc98'], ['hard', '#ffcb3d'], ['rage', '#ff5a6e']];
+    modes.forEach(([m, col], i) => {
+      const x = 420 + i * 148; ctx.fillStyle = col; rr(ctx, x, 498, 136, 82, 16); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke();
+      ctx.textAlign = 'center'; ctx.fillStyle = ink; ctx.font = F('600 22px'); ctx.fillText(SL.DIFFS[m].name.toUpperCase(), x + 68, 526);
+      const ngm = m === save.diff ? save.ng : ((save.runs[m] && save.runs[m].ng) || 0);
+      ctx.font = F('700 36px'); ctx.fillText('Lv ' + bestIn(m) + (ngm ? '+' : ''), x + 68, 566);
+    });
+    lines(rk.title, `${Object.keys(save.trophies).length}/${SL.TROPHIES.length} trophies · ${crackedCount()}/${IDS.length} cheats cracked`);
+    foot = 'Think you can lose better than me?';
+  }
   // the Game's comment
+  ctx.textAlign = 'left';
   ctx.fillStyle = '#ffcb3d'; rr(ctx, 130, 730, 104, 84, 22); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke();
   ctx.fillStyle = '#2a1d38'; rr(ctx, 144, 742, 76, 58, 12); ctx.fill();
   ctx.strokeStyle = '#ff8fa8'; ctx.lineWidth = 5; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(156, 756); ctx.lineTo(172, 762); ctx.moveTo(208, 756); ctx.lineTo(192, 762); ctx.moveTo(160, 786); ctx.quadraticCurveTo(182, 776, 204, 786); ctx.stroke(); ctx.lineCap = 'butt';
   ctx.fillStyle = ink; ctx.font = F('500 24px'); ctx.fillText('THE GAME', 260, 760);
-  ctx.font = F('700 40px'); ctx.fillText(`"${shareQuote}"`, 260, 806);
-  // footer
-  ctx.textAlign = 'center'; ctx.font = F('600 34px'); ctx.fillStyle = '#fffaf2'; ctx.lineWidth = 8; ctx.strokeStyle = ink;
-  const foot = 'Same level for everyone today. Beat me.';
-  ctx.strokeText(foot, S / 2, 930); ctx.fillText(foot, S / 2, 930);
+  ctx.font = F('700 ' + (shareQuote.length > 30 ? 32 : 40) + 'px'); ctx.fillText(`"${shareQuote}"`, 260, 806);
+  ctx.textAlign = 'center';
+  outlined(foot, S / 2, 930, F('600 34px'), '#fffaf2', 8);
+  // who this is, and whether the save was earned here
+  ctx.textAlign = 'right'; ctx.font = F('500 26px'); ctx.fillStyle = '#6d5a73';
+  ctx.fillText('Player #' + save.playerId, S - 120, 846);
+  if (save.imported || save.modified) {
+    const stampText = save.modified ? 'MODIFIED SAVE' : 'IMPORTED SAVE';
+    ctx.save(); ctx.translate(252, 640); ctx.rotate(-0.14);
+    ctx.strokeStyle = '#d6243a'; ctx.lineWidth = 6; rr(ctx, -125, -36, 250, 72, 12); ctx.stroke();
+    ctx.fillStyle = '#d6243a'; ctx.textAlign = 'center'; ctx.font = F('700 30px'); ctx.fillText(stampText, 0, 11);
+    ctx.restore();
+  }
   return cv;
 }
 let cardBlob = null;
-async function openShareCard() {
-  shareQuote = SL.say(SL.VOICE.shareQuote);
+async function openShareCard(kind) {
+  cardKind = kind || 'daily';
+  shareQuote = SL.say(cardKind === 'profile' ? SL.VOICE.profileQuote : cardKind === 'level' ? SL.VOICE.levelQuote : SL.VOICE.shareQuote);
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) { /* draw anyway */ }
   const cv = drawShareCard();
   $('card-img').src = cv.toDataURL('image/png');
+  $('card-title').textContent = { daily: 'Your Daily card', level: 'Your level card', profile: 'Your profile card' }[cardKind];
   cardBlob = await new Promise(res => cv.toBlob(res, 'image/png'));
-  const file = cardBlob && new File([cardBlob], `sore-loser-daily-${dailyNumber(save.daily.key)}.png`, { type: 'image/png' });
+  const file = cardBlob && new File([cardBlob], cardFileName(), { type: 'image/png' });
   show('card-share', !!(file && navigator.canShare && navigator.canShare({ files: [file] })));
   show('card-copy', !!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write));
   $('card-note').textContent = '';
+  if (overlay) closeOverlay();
   openOverlay('card');
 }
 function cardNote(t) { $('card-note').textContent = t; }
@@ -618,6 +727,7 @@ function showEnding(pay) {
   const nextWorld = SL.themeName(world.L.diff, ng + 1);
   $('e-ng-sub').textContent = `New world: ${nextWorld}. ` + (ng + 1 <= 2 ? 'Harder levels, +1 cheat everywhere, bigger pay, and I rewrite some of my own rules.' : 'Harder again. Bigger pay again. I am running out of ideas but not out of spite.');
   mode = 'clear';
+  SL.Audio.music(SL.Audio.titleTrack());
   show('hud', false); show('touch', false); show('s-end', true);
   SL.Audio.play('crack');
   setTimeout(() => checkTrophies(save.totalDeaths), 600);
@@ -701,7 +811,7 @@ function renderDossier() {
     plan.appendChild(li);
   }
   const hrs = Math.floor((p.time) / 60);
-  const stats = [['Levels cleared', save.cleared], ['Best level', save.best], ['Deaths', save.totalDeaths], ['Jumps', p.jumps], ['Minutes played', hrs], ['Cheats cracked', crackedCount() + '/' + IDS.length], ['Loser Rank', SL.rankOf(save.xp).lvl + ' · ' + SL.rankOf(save.xp).title], ['Daily streak', save.streak || 0], ['New Game+', save.ng]];
+  const stats = [['Levels cleared', save.cleared], ['Best level', save.best], ['Deaths', save.totalDeaths], ['Jumps', p.jumps], ['Minutes played', hrs], ['Cheats cracked', crackedCount() + '/' + IDS.length], ['Player', '#' + save.playerId + (save.modified ? ' (modified save)' : save.imported ? ' (imported save)' : '')], ['Times caught', save.caught || 0], ['Loser Rank', SL.rankOf(save.xp).lvl + ' · ' + SL.rankOf(save.xp).title], ['Daily streak', save.streak || 0], ['New Game+', save.ng]];
   $('d-stats').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
 }
 
@@ -798,7 +908,7 @@ function buy(it) {
   if (it.rotate && SL.todayStock(SL.todayKey()).indexOf(it.id) < 0) { shopSay('Not in stock today.'); return; }
   if (!spend(it.price)) return;
   save.owned.push(it.id); save.equip[it.slot] = it.id; SL.look = save.equip; persist();
-  SL.Audio.play('crack'); shopSay(SL.say(SL.VOICE.bought));
+  SL.Audio.play('buy'); shopSay(SL.say(SL.VOICE.bought));
   refreshCounts(); renderShop(); checkTrophies(save.totalDeaths);
 }
 function buyDye(d) {
@@ -838,8 +948,59 @@ function openBox() {
     if (exclusives.length) { const x = pick(exclusives); save.owned.push(x.id); save.boxPity = 0; msg = `!!! ${x.name} !!! I did not mean to give you that.`; } else kind = 'coins';
   }
   if (kind === 'coins') { const n = 40 + Math.floor(Math.random() * 141); save.coins += n; msg = n < SL.BOX.price ? `${n} coins. You lost ${SL.BOX.price - n} on that. Hehe.` : `${n} coins. Lucky. Do not get used to it.`; }
-  persist(); SL.Audio.play(kind === 'exclusive' ? 'win' : 'crack');
+  persist(); SL.Audio.play('box'); setTimeout(() => SL.Audio.play(kind === 'exclusive' ? 'jackpot' : 'buy'), 380);
   shopSay(msg); refreshCounts(); renderShop(); checkTrophies(save.totalDeaths);
+}
+
+// ---------- settings ----------
+function renderSettings() {
+  const st = save.settings;
+  $('set-music').value = Math.round(st.music * 100); $('set-sfx').value = Math.round(st.sfx * 100);
+  for (const k of ['shake', 'flashes', 'narrator']) $('set-' + k).checked = !!st[k];
+  $('set-code').value = '';
+  $('set-note').textContent = '';
+}
+function setSetting(k, v) {
+  save.settings[k] = v; SL.FX = save.settings; persist();
+  if (k === 'music' || k === 'sfx') SL.Audio.setVolumes(save.settings.music, save.settings.sfx);
+  if (k === 'narrator' && !v) hushVoice();
+}
+// Save codes: the whole save as text, so a run can move between browsers or survive clearing site data.
+// There is no server, so this cannot stop sharing. It stops editing (a fingerprint over the contents) and it
+// makes borrowed progress useless for bragging: an imported save is stamped on every share card for good,
+// and its Daily streak does not come along.
+function exportSave() {
+  const json = JSON.stringify(save);
+  const code = 'SL2.' + btoa(unescape(encodeURIComponent(json))) + '.' + fingerprint(json);
+  $('set-code').value = code; $('set-code').select();
+  const msg = 'Save code copied. It is a backup for you: a save loaded from a code is marked IMPORTED on every share card.';
+  if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => $('set-note').textContent = msg, () => $('set-note').textContent = msg);
+  else $('set-note').textContent = msg;
+}
+function importSave() {
+  const code = $('set-code').value.trim().replace(/\s+/g, '');
+  try {
+    const m = /^SL2\.([A-Za-z0-9+/=]+)\.([a-z0-9-]+)$/.exec(code);
+    if (!m) throw new Error(code.startsWith('SL1.') ? 'old' : 'bad');
+    const json = decodeURIComponent(escape(atob(m[1])));
+    if (fingerprint(json) !== m[2]) throw new Error('edited');
+    const data = JSON.parse(json);
+    if (!data || data.v !== 1 || typeof data.level !== 'number') throw new Error('bad');
+    if (!$('set-import').dataset.armed) {
+      $('set-import').dataset.armed = '1'; $('set-import').textContent = 'Really replace?';
+      $('set-note').textContent = `This replaces your current save with one at level ${data.level} (${data.totalDeaths} deaths). It will be marked IMPORTED on share cards and its Daily streak resets. Press again to confirm.`;
+      return;
+    }
+    data.imported = (data.imported || 0) + 1;
+    data.importedAt = Date.now();
+    data.streak = 0; data.lastDaily = null; // streaks are earned on this device only
+    writeSave(data);
+    location.reload();
+  } catch (e) {
+    $('set-note').textContent = e.message === 'edited' ? 'This code has been edited, so I will not load it. Nice try.'
+      : e.message === 'old' ? 'That is an old-style code from an earlier version. Make a new one from the original browser.'
+      : 'That code does not look right. Paste the whole thing, starting with SL2.';
+  }
 }
 
 // ---------- pacts ----------
@@ -897,7 +1058,7 @@ function checkTrophies(liveDeaths) {
     save.coins += t.coins || 0;
     if (t.item && save.owned.indexOf(t.item) < 0) save.owned.push(t.item);
     persist(); refreshCounts();
-    SL.Audio.play('crack');
+    SL.Audio.play('trophy');
     toast('trophy', 'Trophy · +' + (t.coins || 0) + (t.item ? ' + ' + SL.ITEM[t.item].name : ''), t.name, TROPHY_ICON);
   }
 }
@@ -922,7 +1083,7 @@ function renderTrophies() {
 
 function openOverlay(which) {
   overlay = which;
-  ({ sheet: renderSheet, dossier: renderDossier, shop: renderShop, trophies: renderTrophies, pacts: renderPacts, card: () => {} })[which]();
+  ({ sheet: renderSheet, dossier: renderDossier, shop: renderShop, trophies: renderTrophies, pacts: renderPacts, card: () => {}, settings: renderSettings })[which]();
   if (which === 'shop') $('shop-say').textContent = '“' + SL.say(SL.VOICE.shopHello) + '”';
   show('s-' + which, true);
   setTimeout(() => $('s-' + which).querySelector('[data-close]').focus(), 30);
@@ -953,7 +1114,9 @@ function toTitle() {
   show('hud', false); show('touch', false); show('s-title', true); show('t-confirm', false);
   hushVoice();
   setupAttract();
+  SL.Audio.music(SL.Audio.titleTrack());
   refreshCounts();
+  announceUnlocks();
 }
 
 // ---------- input ----------
@@ -1074,8 +1237,17 @@ click('t-shop', () => openOverlay('shop'));
 click('t-trophies', () => openOverlay('trophies'));
 click('c-shop', () => openOverlay('shop'));
 click('p-shop', () => openOverlay('shop'));
-const toggleSound = () => { save.sound = !save.sound; SL.Audio.on = save.sound; persist(); refreshCounts(); };
+const toggleSound = () => { save.sound = !save.sound; SL.Audio.setOn(save.sound); persist(); refreshCounts(); };
 click('t-sound', toggleSound); click('p-sound', toggleSound);
+click('t-settings', () => openOverlay('settings'));
+click('p-settings', () => openOverlay('settings'));
+$('set-music').addEventListener('input', e => setSetting('music', e.target.value / 100));
+$('set-sfx').addEventListener('input', e => setSetting('sfx', e.target.value / 100));
+$('set-sfx').addEventListener('change', () => SL.Audio.play('coin'));
+for (const k of ['shake', 'flashes', 'narrator']) $('set-' + k).addEventListener('change', e => setSetting(k, e.target.checked));
+click('set-export', exportSave);
+click('set-import', importSave);
+$('set-code').addEventListener('input', () => { delete $('set-import').dataset.armed; $('set-import').textContent = 'Load save code'; });
 click('h-sheet', () => { pause(); openOverlay('sheet'); });
 click('h-pause', pause);
 click('p-resume', resume);
@@ -1089,14 +1261,15 @@ click('h-restart', () => { if (mode === 'play') restartCurrent(); });
 click('t-daily', () => { goBig(); show('s-title', false); startDaily(); });
 click('t-pacts', () => openOverlay('pacts'));
 click('c-pacts', () => openOverlay('pacts'));
-click('c-share', openShareCard);
+click('c-share', () => openShareCard(session === 'daily' ? 'daily' : 'level'));
+click('d-share', () => openShareCard('profile'));
 click('card-share', () => {
-  const file = new File([cardBlob], `sore-loser-daily-${dailyNumber(save.daily.key)}.png`, { type: 'image/png' });
+  const file = new File([cardBlob], cardFileName(), { type: 'image/png' });
   navigator.share({ files: [file], text: shareText() }).catch(() => {});
 });
 click('card-save', () => {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(cardBlob); a.download = `sore-loser-daily-${dailyNumber(save.daily.key)}.png`;
+  a.href = URL.createObjectURL(cardBlob); a.download = cardFileName();
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   cardNote('Saved to your downloads.');
@@ -1116,7 +1289,7 @@ click('c-sheet', () => openOverlay('sheet'));
 click('c-dossier', () => openOverlay('dossier'));
 click('c-title', toTitle);
 for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', () => { SL.Audio.play('click'); closeOverlay(); });
-for (const s of ['s-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-card']) $(s).addEventListener('click', e => { if (e.target === $(s)) closeOverlay(); });
+for (const s of ['s-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-card', 's-settings']) $(s).addEventListener('click', e => { if (e.target === $(s)) closeOverlay(); });
 
 // ---------- loop ----------
 let last = performance.now(), acc = 0;
@@ -1154,10 +1327,26 @@ function frame(now) {
 
 // ---------- boot ----------
 SL.debug = { get world() { return world; }, input, get save() { return save; }, startLevel };
-SL.Audio.on = save.sound;
+// Caught editing the save: the Game reacts on the title screen.
+function caughtScene() {
+  if (!tamper) return;
+  persist(); // the honest copy (or the stamped one) becomes the save again
+  document.body.classList.add('caught');
+  const el = $('caught'); el.hidden = false;
+  el.querySelector('b').textContent = tamper === 'restored' ? 'I SAW THAT.' : 'THESE NUMBERS ARE NOT YOURS.';
+  const lines = tamper === 'restored' ? SL.VOICE.caughtRestored : SL.VOICE.caughtModified;
+  setTimeout(() => { el.hidden = true; document.body.classList.remove('caught'); lines.forEach(t => say(SL.say(t, { n: save.caught }), 'glitch', { hold: 2.6, prio: 4, force: true })); }, 2600);
+  R.glitch = 1.2;
+  setTimeout(() => SL.Audio.play('unplug'), 100);
+  setTimeout(() => checkTrophies(), 3000);
+}
+SL.Audio.setOn(save.sound);
+SL.Audio.setVolumes(save.settings.music, save.settings.sfx);
+SL.Audio.music(SL.Audio.titleTrack()); // starts on the first tap or key press
 layout();
 setupAttract();
 refreshCounts();
-setTimeout(() => checkTrophies(), 900); // anything already earned pays out on boot
+setTimeout(() => { checkTrophies(); announceUnlocks(); }, 900); // anything already earned pays out on boot
+caughtScene();
 requestAnimationFrame(frame);
 })();

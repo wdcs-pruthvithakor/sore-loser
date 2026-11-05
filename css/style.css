@@ -494,3 +494,31 @@ body.touchy .toasts { bottom: auto; top: 44px; }
 .card-img { display: block; width: 100%; aspect-ratio: 1; margin: 12px 0; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 0 4px 0 var(--ink); background: var(--paper-2); }
 .card-note { margin: 8px 0 0; text-align: center; font-size: 14px; color: var(--ink-2); min-height: 1.2em; }
 @media (max-height: 640px) { .card-img { width: min(100%, 52vh); margin: 8px auto; } }
+
+/* ---------- settings, unlocks ---------- */
+.locked-ui { display: none !important; }
+#s-settings { z-index: 20; }
+.title-foot { display: flex; gap: 14px; justify-content: center; }
+.settings { width: min(560px, 100%); }
+.set-grid { display: grid; gap: 10px; margin-top: 14px; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #fff; border: 2.5px solid var(--ink); border-radius: 14px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+.set-row span { display: flex; flex-direction: column; }
+.set-row small { font-weight: 400; font-size: 12px; color: var(--ink-2); }
+.set-row input[type=range] { width: 55%; accent-color: var(--violet); }
+.set-row.toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.set-row.toggle i { flex: none; width: 46px; height: 26px; border-radius: 99px; border: 2.5px solid var(--ink); background: var(--paper-2); position: relative; transition: background .15s; }
+.set-row.toggle i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: var(--ink); transition: transform .15s; }
+.set-row.toggle input:checked + i { background: var(--mint); }
+.set-row.toggle input:checked + i::after { transform: translateX(20px); }
+.set-row.toggle input:focus-visible + i { outline: 3px solid var(--violet); outline-offset: 2px; }
+.set-code { width: 100%; margin: 10px 0; font-family: var(--mono); font-size: 12px; border: 2.5px solid var(--ink); border-radius: 12px; padding: 8px; resize: vertical; background: #fff; color: var(--ink); }
+.menu-row:not(:has(> :not(.locked-ui))) { display: none; }
+
+/* ---------- caught editing the save ---------- */
+.caught-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(10,0,4,0.86); pointer-events: none; animation: caughtIn .25s steps(3) both; }
+.caught-overlay b { font-family: var(--font); font-size: clamp(40px, 9vw, 120px); font-weight: 700; color: #ff2a3a; letter-spacing: 0.04em; text-align: center; padding: 0 16px;
+  text-shadow: 4px 0 #00e0ff, -4px 0 #ff00a0; animation: caughtJitter .09s steps(2) infinite; }
+@keyframes caughtIn { from { opacity: 0; } }
+@keyframes caughtJitter { 50% { transform: translate(3px, -2px) skewX(4deg); } }
+body.caught #app { filter: invert(1) hue-rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .caught-overlay b { animation: none; } }
