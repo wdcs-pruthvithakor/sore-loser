@@ -265,7 +265,7 @@ function setupAttract() {
   } catch (e) { attract = null; }
 }
 
-const SCREENS = ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-end'];
+const SCREENS = ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-end', 's-card'];
 function enterPlay(levelLabel, restart) {
   R.setWorld(world);
   $('stage').classList.toggle('boss', !!world.L.boss);
@@ -520,11 +520,93 @@ function finishLevel(opts) {
 }
 
 // The text people paste into chats after the Daily.
+// 5 squares: green is good, red is a lot of deaths.
+const gradeOf = deaths => deaths === 0 ? 'ggggg' : deaths < 5 ? 'gggyy' : deaths < 15 ? 'gyyrr' : deaths < 40 ? 'yrrrr' : 'rrrrr';
+let shareQuote = '';
 function shareText() {
   const d = save.daily, n = dailyNumber(d.key);
-  const grade = d.last === 0 ? '🟩🟩🟩🟩🟩' : d.last < 5 ? '🟩🟩🟩🟨🟨' : d.last < 15 ? '🟩🟨🟨🟥🟥' : d.last < 40 ? '🟨🟥🟥🟥🟥' : '🟥🟥🟥🟥🟥';
-  return `Sore Loser · Daily #${n}\n💀 ${d.last}  ⏱ ${fmtTime(d.lastTime)}${save.streak > 1 ? '  🔥' + save.streak : ''}\n${grade}\n"${SL.say(SL.VOICE.shareQuote)}"`;
+  const grade = gradeOf(d.last).replace(/g/g, '🟩').replace(/y/g, '🟨').replace(/r/g, '🟥');
+  return `Sore Loser · Daily #${n}\n💀 ${d.last}  ⏱ ${fmtTime(d.lastTime)}${save.streak > 1 ? '  🔥' + save.streak : ''}\n${grade}\n"${shareQuote}"`;
 }
+
+// ---------- the share card: a 1080×1080 image of today's result ----------
+function drawShareCard() {
+  const d = save.daily, n = dailyNumber(d.key), S = 1080;
+  const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+  const ctx = cv.getContext('2d'), rr = SL.rrect;
+  const pal = SL.paletteFor(SL.themeFor('hard', 0), 2, 2);
+  const ink = '#3b2a40', F = w => `${w} Fredoka, system-ui, sans-serif`;
+  // sky, hills and a spike floor in today's world
+  const g = ctx.createLinearGradient(0, 0, 0, S); g.addColorStop(0, pal.skyA); g.addColorStop(1, pal.skyB);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  const glow = ctx.createRadialGradient(840, 190, 30, 840, 190, 260); glow.addColorStop(0, 'rgba(255,40,50,0.5)'); glow.addColorStop(1, 'rgba(255,40,50,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = '#c8202c'; ctx.beginPath(); ctx.arc(840, 190, 70, 0, 7); ctx.fill();
+  for (const [col, base, amp, f] of [[pal.far, 700, 70, 0.006], [pal.near, 800, 60, 0.01]]) {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, S);
+    for (let x = 0; x <= S; x += 14) { const y = base - Math.sin(x * f + n) * amp - Math.sin(x * f * 2.7 + 1) * amp * 0.35; ctx.lineTo(x - 7, y); ctx.lineTo(x - 3, y - 12); ctx.lineTo(x, y); }
+    ctx.lineTo(S, S); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = pal.dirt; ctx.fillRect(0, 990, S, 90);
+  ctx.fillStyle = pal.grass; ctx.fillRect(0, 990, S, 16);
+  for (let i = 0; i < 18; i++) { const x = i * 60 + 10; ctx.beginPath(); ctx.moveTo(x, 990); ctx.lineTo(x + 20, 955); ctx.lineTo(x + 40, 990); ctx.fillStyle = '#eef2fb'; ctx.fill(); ctx.strokeStyle = '#6f7591'; ctx.lineWidth = 4; ctx.stroke(); }
+  // logo
+  ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+  const logo = (t, y, size, col) => { ctx.font = F('700 ' + size + 'px'); ctx.lineWidth = 14; ctx.strokeStyle = ink; ctx.strokeText(t, S / 2, y); ctx.fillStyle = col; ctx.fillText(t, S / 2, y); };
+  logo('SORE LOSER', 150, 120, '#ffcb3d');
+  ctx.font = F('600 40px'); ctx.fillStyle = '#fffaf2'; ctx.lineWidth = 8; ctx.strokeStyle = ink;
+  const sub = `DAILY GRUDGE #${n} · ${d.key}`; ctx.strokeText(sub, S / 2, 215); ctx.fillText(sub, S / 2, 215);
+  // the panel
+  ctx.fillStyle = 'rgba(28,18,38,0.35)'; rr(ctx, 96, 268, S - 192, 600, 48); ctx.fill();
+  ctx.fillStyle = '#fffaf2'; rr(ctx, 90, 258, S - 180, 600, 48); ctx.fill();
+  ctx.lineWidth = 8; ctx.strokeStyle = ink; ctx.stroke();
+  // the blob in your skin, looking smug
+  ctx.save(); ctx.translate(250, 520); ctx.scale(6, 6);
+  SL.drawBlob(ctx, { cx: 0, by: 0, face: 1, time: 1, skin: save.equip.skin, hat: save.equip.hat, dye: save.equip.dye, pin: save.equip.pin });
+  ctx.restore();
+  // stats
+  const stat = (x, label, value, col) => {
+    ctx.fillStyle = col; rr(ctx, x, 300, 200, 170, 28); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke();
+    ctx.fillStyle = ink; ctx.font = F('600 28px'); ctx.fillText(label, x + 100, 345);
+    ctx.font = F('700 74px'); ctx.fillText(value, x + 100, 435);
+  };
+  ctx.textAlign = 'center';
+  stat(420, 'DEATHS', String(d.last), '#ffd6de');
+  stat(650, 'TIME', fmtTime(d.lastTime), '#d8f0ff');
+  // streak + grade row
+  const grade = gradeOf(d.last), cols = { g: '#6fdc98', y: '#ffcb3d', r: '#ff5a6e' };
+  for (let i = 0; i < 5; i++) { ctx.fillStyle = cols[grade[i]]; rr(ctx, 420 + i * 88, 500, 76, 76, 16); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke(); }
+  ctx.textAlign = 'left'; ctx.font = F('700 40px'); ctx.fillStyle = ink;
+  ctx.fillText(save.streak > 1 ? `${save.streak}-day streak` : 'Day one of the grudge', 420, 640);
+  ctx.font = F('500 30px'); ctx.fillStyle = '#6d5a73';
+  ctx.fillText(`${SL.DIFFS.hard.name} · ${dailyPlan().cheats.length} cheats`, 420, 684);
+  // the Game's comment
+  ctx.fillStyle = '#ffcb3d'; rr(ctx, 130, 730, 104, 84, 22); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = ink; ctx.stroke();
+  ctx.fillStyle = '#2a1d38'; rr(ctx, 144, 742, 76, 58, 12); ctx.fill();
+  ctx.strokeStyle = '#ff8fa8'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(156, 756); ctx.lineTo(172, 762); ctx.moveTo(208, 756); ctx.lineTo(192, 762); ctx.moveTo(160, 786); ctx.quadraticCurveTo(182, 776, 204, 786); ctx.stroke(); ctx.lineCap = 'butt';
+  ctx.fillStyle = ink; ctx.font = F('500 24px'); ctx.fillText('THE GAME', 260, 760);
+  ctx.font = F('700 40px'); ctx.fillText(`"${shareQuote}"`, 260, 806);
+  // footer
+  ctx.textAlign = 'center'; ctx.font = F('600 34px'); ctx.fillStyle = '#fffaf2'; ctx.lineWidth = 8; ctx.strokeStyle = ink;
+  const foot = 'Same level for everyone today. Beat me.';
+  ctx.strokeText(foot, S / 2, 930); ctx.fillText(foot, S / 2, 930);
+  return cv;
+}
+let cardBlob = null;
+async function openShareCard() {
+  shareQuote = SL.say(SL.VOICE.shareQuote);
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) { /* draw anyway */ }
+  const cv = drawShareCard();
+  $('card-img').src = cv.toDataURL('image/png');
+  cardBlob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  const file = cardBlob && new File([cardBlob], `sore-loser-daily-${dailyNumber(save.daily.key)}.png`, { type: 'image/png' });
+  show('card-share', !!(file && navigator.canShare && navigator.canShare({ files: [file] })));
+  show('card-copy', !!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write));
+  $('card-note').textContent = '';
+  openOverlay('card');
+}
+function cardNote(t) { $('card-note').textContent = t; }
 
 // ---------- the ending ----------
 function showEnding(pay) {
@@ -840,7 +922,7 @@ function renderTrophies() {
 
 function openOverlay(which) {
   overlay = which;
-  ({ sheet: renderSheet, dossier: renderDossier, shop: renderShop, trophies: renderTrophies, pacts: renderPacts })[which]();
+  ({ sheet: renderSheet, dossier: renderDossier, shop: renderShop, trophies: renderTrophies, pacts: renderPacts, card: () => {} })[which]();
   if (which === 'shop') $('shop-say').textContent = '“' + SL.say(SL.VOICE.shopHello) + '”';
   show('s-' + which, true);
   setTimeout(() => $('s-' + which).querySelector('[data-close]').focus(), 30);
@@ -1007,11 +1089,25 @@ click('h-restart', () => { if (mode === 'play') restartCurrent(); });
 click('t-daily', () => { goBig(); show('s-title', false); startDaily(); });
 click('t-pacts', () => openOverlay('pacts'));
 click('c-pacts', () => openOverlay('pacts'));
-click('c-share', () => {
+click('c-share', openShareCard);
+click('card-share', () => {
+  const file = new File([cardBlob], `sore-loser-daily-${dailyNumber(save.daily.key)}.png`, { type: 'image/png' });
+  navigator.share({ files: [file], text: shareText() }).catch(() => {});
+});
+click('card-save', () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(cardBlob); a.download = `sore-loser-daily-${dailyNumber(save.daily.key)}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  cardNote('Saved to your downloads.');
+});
+click('card-copy', () => {
+  navigator.clipboard.write([new ClipboardItem({ 'image/png': cardBlob })]).then(() => cardNote('Image copied. Paste it anywhere.'), () => cardNote('Your browser blocked copying images. Use Save image.'));
+});
+click('card-text', () => {
   const txt = shareText();
-  const done = () => { $('c-share').textContent = 'Copied!'; setTimeout(() => { $('c-share').textContent = 'Copy result'; }, 1600); };
-  if (navigator.share && touchy) navigator.share({ text: txt }).catch(() => {});
-  else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, () => window.prompt('Copy this:', txt));
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => cardNote('Text copied.'), () => window.prompt('Copy this:', txt));
+  else window.prompt('Copy this:', txt);
 });
 click('e-ng', startNG);
 click('e-keep', () => { show('s-end', false); startLevel(save.level); });
@@ -1020,7 +1116,7 @@ click('c-sheet', () => openOverlay('sheet'));
 click('c-dossier', () => openOverlay('dossier'));
 click('c-title', toTitle);
 for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', () => { SL.Audio.play('click'); closeOverlay(); });
-for (const s of ['s-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts']) $(s).addEventListener('click', e => { if (e.target === $(s)) closeOverlay(); });
+for (const s of ['s-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-card']) $(s).addEventListener('click', e => { if (e.target === $(s)) closeOverlay(); });
 
 // ---------- loop ----------
 let last = performance.now(), acc = 0;

@@ -9,7 +9,7 @@
 <meta name="description" content="A cute little platformer that cheats. It moves the exit, lies on its signs and fakes its spikes, but every cheat follows a rule. Learn the rules, then beat it.">
 <meta name="theme-color" content="#1c1226">
 <link rel="preload" href="fonts/Fredoka-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=15">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='24' rx='7' fill='%23ffcb3d' stroke='%233b2a40' stroke-width='2.5'/%3E%3Ccircle cx='11' cy='15' r='2.5' fill='%233b2a40'/%3E%3Cpath d='M18 13l5 2-5 2' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3Cpath d='M10 21q6 4 12-1' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -186,7 +186,28 @@
     </div>
   </section>
 
-  <!-- Ending -->
+  <!-- Daily share card -->
+  <section id="s-card" class="screen" hidden>
+    <div class="panel card-panel">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">Brag, or confess</p>
+          <h2>Your Daily card</h2>
+        </div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <img id="card-img" class="card-img" alt="Your Daily Grudge result card">
+      <div class="menu-row">
+        <button type="button" class="btn primary" id="card-share" hidden>Share</button>
+        <button type="button" class="btn primary" id="card-save">Save image</button>
+        <button type="button" class="btn" id="card-copy" hidden>Copy image</button>
+        <button type="button" class="btn small ghost" id="card-text">Copy as text</button>
+      </div>
+      <p class="card-note" id="card-note" aria-live="polite"></p>
+    </div>
+  </section>
+
+    <!-- Ending -->
   <section id="s-end" class="screen" hidden>
     <div class="panel ending">
       <p class="eyebrow">Level 100</p>
@@ -235,7 +256,7 @@
       <div class="used" id="c-used"></div>
       <div class="menu-row">
         <button type="button" class="btn primary big" id="c-next">Next level <kbd>Enter</kbd></button>
-        <button type="button" class="btn big" id="c-share" hidden>Copy result</button>
+        <button type="button" class="btn big" id="c-share" hidden>Share card</button>
       </div>
       <div class="menu-row">
         <button type="button" class="btn small" id="c-sheet">Cheat Sheet</button>
@@ -269,13 +290,13 @@
   </section>
 </div>
 
-<script src="js/core.js?v=14"></script>
-<script src="js/profile.js?v=14"></script>
-<script src="js/game.js?v=14"></script>
-<script src="js/voice.js?v=14"></script>
-<script src="js/audio.js?v=14"></script>
-<script src="js/cosmetics.js?v=14"></script>
-<script src="js/render.js?v=14"></script>
-<script src="js/main.js?v=14"></script>
+<script src="js/core.js?v=15"></script>
+<script src="js/profile.js?v=15"></script>
+<script src="js/game.js?v=15"></script>
+<script src="js/voice.js?v=15"></script>
+<script src="js/audio.js?v=15"></script>
+<script src="js/cosmetics.js?v=15"></script>
+<script src="js/render.js?v=15"></script>
+<script src="js/main.js?v=15"></script>
 </body>
 </html>

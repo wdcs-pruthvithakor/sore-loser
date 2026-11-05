@@ -489,3 +489,8 @@ body.touchy .toasts { bottom: auto; top: 44px; }
 #stage.boss .voice { left: 4px; transform: none; top: 44px; max-width: min(300px, 40%); }
 #stage.boss .voice.on { transform: none; }
 .seg button small { display: block; font-size: 11px; font-weight: 500; opacity: 0.75; margin-top: -2px; }
+#s-card { z-index: 20; }
+.card-panel { width: min(560px, 100%); }
+.card-img { display: block; width: 100%; aspect-ratio: 1; margin: 12px 0; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 0 4px 0 var(--ink); background: var(--paper-2); }
+.card-note { margin: 8px 0 0; text-align: center; font-size: 14px; color: var(--ink-2); min-height: 1.2em; }
+@media (max-height: 640px) { .card-img { width: min(100%, 52vh); margin: 8px auto; } }

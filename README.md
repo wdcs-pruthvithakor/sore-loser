@@ -52,7 +52,7 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
   Grudge Box (stated odds, pity at 12). Cosmetics never change how a level plays.
 - **Consumables**: Snitch Lens, Bubble, Pocket Flag, Skip Ticket, used from the pause menu. Using one marks the level
   Assisted: half pay, no trophies or mastery, and none allowed in the Daily.
-- **Daily Grudge**: one seeded Hard level per day (same for everyone), streak bonus, copy-paste result card.
+- **Daily Grudge**: one seeded Hard level per day (same for everyone), streak bonus, and a 1080×1080 image share card (share sheet on phones, save or copy image, or copy as text).
 - **Grudge Pacts**: opt-in punishments (+1 cheat, no checkpoints, forced Copycat/Spike Wall, blackout, coin drop)
   that multiply payouts.
 - **Cheat mastery**: Bronze/Silver/Gold at 5/25/75 clears with a cheat; Gold unlocks that cheat's pin.
