@@ -71,7 +71,8 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
   (`soreloser_cache`, with its own fingerprint sealed inside).
   Editing the save in browser storage brings the honest copy back with an "I SAW THAT." scene; editing both
   copies keeps the save but stamps it MODIFIED on every share card. It stops casual editing only (the formula
-  is in the client), and Times caught is shown in the Dossier.
+  is in the client), and Times caught is shown in the Dossier. The save is also watched live (every 1.5 s
+  and on tab focus), so an edit made while the game is open is caught on the spot, every time.
 - **Gradual unlocks**: a new player sees only Play; Cheat Sheet, Shop, Trophies, Daily, modes and Pacts
   unlock over the first levels with a line from the narrator.
 - **Share cards**: 1080×1080 images for the Daily, any cleared level, and your profile (from the Dossier).

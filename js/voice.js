@@ -108,6 +108,15 @@ SL.VOICE = {
   shareQuote: ['you again.', 'stop sharing this.', 'it was rigged. by me.', 'I let you win. (I did not.)'],
   levelQuote: ['That level was supposed to be the last one.', 'I am filing a complaint.', 'Lucky. Extremely lucky.', 'I let that happen. (I did not.)'],
   profileQuote: ['This person will not stop playing.', 'My least favourite player.', 'Please take them away.', 'I have a file on them. It is very long.'],
+  caughtHeadlines: ['I SAW THAT.', 'AGAIN?', 'I AM ALWAYS WATCHING.', 'STOP TOUCHING MY FILES.', 'YOU CANNOT WIN THIS WAY.', 'I SAW THAT. AGAIN.'],
+  caughtTimes: [
+    ['You changed my numbers.', 'I put them back.', 'I am always watching the save file. Times caught: {n}.'],
+    ['Again? Really?', 'I put them back. Again.', 'Times caught: {n}. I am writing all of this down.'],
+    ['I see every number you touch.', 'Every. Single. One.', 'Times caught: {n}. This is in your Dossier forever.'],
+    ['Stop touching my files.', 'You cannot cheat a cheater.', 'Times caught: {n}.'],
+    ['Do you think this is working?', 'It is not working.', 'Times caught: {n}. I am almost impressed.'],
+    ['{n} times.', 'I have stopped being angry. Now I am just sad.', 'Go play the game.']
+  ],
   caughtRestored: ['You changed my numbers.', 'I put them back.', 'I am always watching the save file. Times caught: {n}.'],
   caughtModified: ['These numbers are not yours.', 'I cannot undo it this time. So I wrote MODIFIED on everything.', 'Everyone will know. Times caught: {n}.'],
     newRun: ['A new run! Same old me.', 'Starting over? I kept your file.']

@@ -51,10 +51,12 @@ function readCache() {
     return fingerprint(json) === fp ? json : null;
   } catch (e) { return null; }
 }
+let lastWrite = null; // exactly what this tab last wrote, so a live edit can be spotted
 function writeSave(obj) {
   const json = JSON.stringify(obj);
   localStorage.setItem(KEY, json); localStorage.setItem(KEY_FP, fingerprint(json));
   writeCache(json);
+  lastWrite = { json, fp: localStorage.getItem(KEY_FP), cache: localStorage.getItem(KEY_CACHE) };
   localStorage.removeItem(KEY + '_good'); localStorage.removeItem(KEY + '_good_fp'); // the old plain backup
 }
 function load() {
@@ -85,6 +87,7 @@ function load() {
 }
 let save = load();
 try { if (localStorage.getItem(KEY) && !tamper && (localStorage.getItem(KEY_FP) === null || !localStorage.getItem(KEY_CACHE))) persist(); } catch (e) { /* storage blocked */ } // older saves get a fingerprint and a scrambled backup right away
+try { if (!tamper && !lastWrite && localStorage.getItem(KEY)) lastWrite = { json: localStorage.getItem(KEY), fp: localStorage.getItem(KEY_FP), cache: localStorage.getItem(KEY_CACHE) }; } catch (e) { /* storage blocked */ }
 // Older saves can name cheats that were retired; drop them.
 if (!SL.DIFFS[save.diff]) save.diff = 'normal';
 save.stats2 = Object.assign({ clean: 0, hard: 0, rage: 0, maxDeathsCleared: 0, fastest: 0, twists: {}, grabbed: 0, dailies: 0, bestStreak: 0, maxPacts: 0, boxes: 0, endings: 0, maxNgBeaten: -1 }, save.stats2);
@@ -228,7 +231,17 @@ function layout() {
   $('stage').style.width = w + 'px'; $('stage').style.height = h + 'px';
   $('stage').style.borderRadius = pad ? '18px' : '0';
   R.resize(w, h);
+  // the narrator and the pop-ups live above every screen, pinned to the game area
+  requestAnimationFrame(() => {
+    const r = $('stage').getBoundingClientRect(), st = document.documentElement.style;
+    st.setProperty('--stage-top', r.top + 'px'); st.setProperty('--stage-left', r.left + 'px');
+    st.setProperty('--stage-cx', (r.left + r.width / 2) + 'px'); st.setProperty('--stage-w', r.width + 'px');
+    st.setProperty('--stage-right-gap', (window.innerWidth - r.right) + 'px'); st.setProperty('--stage-bottom-gap', (window.innerHeight - r.bottom) + 'px');
+  });
 }
+// lift the narrator and toasts out of the game area so menus can never cover them
+document.body.appendChild($('voice'));
+document.body.appendChild($('toasts'));
 window.addEventListener('resize', layout);
 window.addEventListener('orientationchange', () => setTimeout(layout, 150));
 let touchy = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || /[?&]touch=1/.test(location.search);
@@ -360,6 +373,7 @@ function enterPlay(levelLabel, restart) {
   R.setWorld(world); R.attract = false;
   SL.Audio.music(SL.Audio.trackFor(R.themeId, world.L.diff, world.L.ng || 0, { boss: !!world.L.boss }));
   $('stage').classList.toggle('boss', !!world.L.boss);
+  document.body.classList.toggle('boss-fight', !!world.L.boss);
   mode = 'play'; overlay = null;
   for (const s of SCREENS) show(s, false);
   show('hud', true); show('touch', touchy);
@@ -1145,6 +1159,7 @@ function toTitle() {
   hushVoice();
   setupAttract();
   SL.Audio.music(SL.Audio.titleTrack());
+  document.body.classList.remove('boss-fight');
   refreshCounts();
   announceUnlocks();
 }
@@ -1324,7 +1339,10 @@ for (const s of ['s-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-c
 // ---------- loop ----------
 let last = performance.now(), acc = 0;
 const STEP = 1 / 120;
+let inPlayCls = null;
 function frame(now) {
+  const ip = mode === 'play' && !overlay;
+  if (ip !== inPlayCls) { inPlayCls = ip; document.body.classList.toggle('in-play', ip); }
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   quipCd -= dt;
@@ -1356,20 +1374,44 @@ function frame(now) {
 }
 
 // ---------- boot ----------
-SL.debug = { get world() { return world; }, input, get save() { return save; }, startLevel };
+SL.debug = { get world() { return world; }, input, get save() { return save; }, startLevel, say };
 // Caught editing the save: the Game reacts on the title screen.
+let sceneUntil = 0;
 function caughtScene() {
   if (!tamper) return;
+  const kind = tamper; tamper = null;
   persist(); // the honest copy (or the stamped one) becomes the save again
+  if (mode === 'play' && !overlay) pause();
   document.body.classList.add('caught');
   const el = $('caught'); el.hidden = false;
-  el.querySelector('b').textContent = tamper === 'restored' ? 'I SAW THAT.' : 'THESE NUMBERS ARE NOT YOURS.';
-  const lines = tamper === 'restored' ? SL.VOICE.caughtRestored : SL.VOICE.caughtModified;
-  setTimeout(() => { el.hidden = true; document.body.classList.remove('caught'); lines.forEach(t => say(SL.say(t, { n: save.caught }), 'glitch', { hold: 2.6, prio: 4, force: true })); }, 2600);
+  const n = save.caught || 1;
+  // a different line set each time you are caught, getting worse
+  const sets = kind === 'modified' ? [SL.VOICE.caughtModified] : SL.VOICE.caughtTimes;
+  const lines = sets[Math.min(n - 1, sets.length - 1)];
+  el.querySelector('b').textContent = kind === 'modified' ? 'THESE NUMBERS ARE NOT YOURS.' : SL.VOICE.caughtHeadlines[Math.min(n - 1, SL.VOICE.caughtHeadlines.length - 1)];
+  sceneUntil = performance.now() + 2600;
+  hushVoice();
+  setTimeout(() => { el.hidden = true; document.body.classList.remove('caught'); lines.forEach(t => say(SL.say(t, { n }), 'glitch', { hold: 2.6, prio: 4, force: true })); }, 2600);
   R.glitch = 1.2;
   setTimeout(() => SL.Audio.play('unplug'), 100);
-  setTimeout(() => checkTrophies(), 3000);
+  setTimeout(() => { checkTrophies(); refreshCounts(); }, 3000);
 }
+// Watch the save while the game is open: any edit made in the browser's storage is caught on the spot.
+function watchSave() {
+  if (!lastWrite || performance.now() < sceneUntil) return;
+  let cur, fp, cache;
+  try { cur = localStorage.getItem(KEY); fp = localStorage.getItem(KEY_FP); cache = localStorage.getItem(KEY_CACHE); } catch (e) { return; }
+  if (cur === lastWrite.json && fp === lastWrite.fp && cache === lastWrite.cache) return;
+  // another tab of the game saving honestly: adopt nothing, just note it (its fingerprint is valid)
+  if (cur && fp && fingerprint(cur) === fp && readCache() === cur) { lastWrite = { json: cur, fp, cache }; return; }
+  // edited: the copy in memory is the honest one, so it goes straight back
+  save.caught = (save.caught || 0) + 1;
+  tamper = 'restored';
+  caughtScene();
+}
+setInterval(watchSave, 1500);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) watchSave(); });
+window.addEventListener('focus', watchSave);
 SL.Audio.setOn(save.sound);
 SL.Audio.setVolumes(save.settings.music, save.settings.sfx);
 SL.Audio.music(SL.Audio.titleTrack()); // starts on the first tap or key press
