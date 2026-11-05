@@ -1,5 +1,5 @@
 // Spite Coins, the shop, trophies and how the player blob is drawn with them.
-// Cosmetic only: nothing here changes how a level plays.
+// Cosmetics never change how a level plays. The consumables defined here do, and using one marks the level Assisted.
 (function (G) {
 'use strict';
 const SL = G.SL;
