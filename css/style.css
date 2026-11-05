@@ -542,3 +542,21 @@ body.boss-fight .voice.on { transform: none; }
 }
 /* on menus the narrator moves to the very top, over the logo, so it never hides a button */
 body:not(.in-play) .voice { top: max(6px, env(safe-area-inset-top)); }
+
+/* ---------- tall menus in small windows ---------- */
+/* Center a menu only when it fits; when it is taller than the window it starts at the top and scrolls,
+   instead of being pushed above the screen where it can't be reached. */
+.screen { place-items: start center; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.screen > * { margin-block: auto; }
+/* the header with the close button stays on screen while a long panel scrolls */
+.panel > .panel-h { position: sticky; top: 0; z-index: 3; padding: 8px 0 10px; margin-top: -8px; background: var(--paper); }
+.dossier > .panel-h { background: #fdf6e3; }
+.sheet > .panel-h { background: var(--paper); }
+.dossier { overflow: clip; }
+.trait .bar { overflow: hidden; }
+.trait .bar i { max-width: 100%; }
+.screen { overflow-x: hidden; }
+.panel { max-width: 100%; }
+.panel { box-sizing: border-box; }
+.tro-list { grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
+.items { grid-template-columns: repeat(auto-fill, minmax(min(118px, 100%), 1fr)); }
