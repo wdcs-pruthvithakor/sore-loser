@@ -199,18 +199,21 @@ const SIGNS = {
 
 // ---------- generator ----------
 // Builds a level left to right from segments that stay inside the jump envelope, then checks the route.
-function buildOnce(runSeed, level, cheats, salt, diff) {
+function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   diff = SL.DIFFS[diff] ? diff : 'normal';
-  const seed = hashStr(runSeed + ':' + diff + ':' + level + ':' + salt);
+  opts = opts || {};
+  const ng = opts.ng || 0;
+  const seed = hashStr(runSeed + ':' + diff + ':' + level + ':' + salt + (ng ? ':ng' + ng : ''));
   const r = rng(seed);
-  const tier = Math.min(4, SL.tierOf(level) + SL.DIFFS[diff].bump);  // how mean the layout is
+  const tier = Math.min(4, SL.tierOf(level) + SL.DIFFS[diff].bump + Math.min(2, ng));  // how mean the layout is
   const rage = diff === 'rage';
   const has = id => cheats.indexOf(id) >= 0;
   const MAXW = 560;
   const g = new Uint8Array(MAXW * H);
   const L = {
     level, seed, diff, tier: SL.tierOf(level), gt: tier, cheats: cheats.slice(), plats: [], signs: [], forks: [], saws: [], mimics: [],
-    tunnels: [], lungers: [], invis: [], coins: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null
+    tunnels: [], lungers: [], invis: [], coins: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null,
+    ng, remix: SL.remixFor(ng)
   };
   const get = (c, row) => (c >= 0 && c < MAXW && row >= 0 && row < H) ? g[row * MAXW + c] : E;
   const set = (c, row, v) => { if (c >= 0 && c < MAXW && row >= 0 && row < H) g[row * MAXW + c] = v; };
@@ -391,7 +394,9 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
     }
     const lie = r.chance(0.5);
     const claim = lie ? (safe === 'high' ? 'low' : 'high') : safe;
-    const pool = lie ? (claim === 'high' ? SIGNS.lieHigh : SIGNS.lieLow) : (claim === 'high' ? SIGNS.truthHigh : SIGNS.truthLow);
+    // remixed (New Game+): "..." lies and "!" tells the truth, so the pools swap
+    const shout = !L.remix.shouting === lie;
+    const pool = shout ? (claim === 'high' ? SIGNS.lieHigh : SIGNS.lieLow) : (claim === 'high' ? SIGNS.truthHigh : SIGNS.truthLow);
     L.signs.push({ x: signCol * T + T / 2, y: h * T, text: strip(r.pick(pool)), lie, fork: L.forks.length });
     L.forks.push({ trapX0: trapAt * T, trapX1: (trapAt + TW) * T, ceilY: (h - 4) * T, safe, claim, lie, x0: m0 * T });
     x = m0 + M;
@@ -582,6 +587,12 @@ function buildOnce(runSeed, level, cheats, salt, diff) {
   col(x, 0); col(x + 1, 0); x += 2;
   L.hops = has('coldFeet') ? Math.min(L.doorSpots.length - 1, 2 + Math.floor(tier / 2)) : 0;
 
+  // remixed signs: every other sign swaps its ending, so "!" is now the honest one
+  if (L.remix.shouting) for (const sg of L.signs) if (sg.fork === undefined) sg.text = sg.text.replace(/!$/, '\u0000').replace(/\.\.\.$/, '!').replace(/\u0000$/, '...');
+  // pacts
+  if (opts.pacts && opts.pacts.noflag) L.checkpoint = null;
+  if (opts.pacts && opts.pacts.dark) L.twist = 'dark';
+
   // compact
   L.w = x;
   L.tiles = new Uint8Array(L.w * H);
@@ -637,9 +648,39 @@ SL.validate = function (L) {
   return L.doorSpots.every(s => { const [c, row] = cell(s); return seen.has(c + ',' + row); });
 };
 
-SL.buildLevel = function (runSeed, level, cheats, diff) {
+// New Game+ rewrites some rules. NG+1 flips two cheats, NG+2 two more.
+SL.remixFor = ng => ({ coldFeet: ng >= 1, shouting: ng >= 1, mimic: ng >= 2, backwardsFlag: ng >= 2 });
+SL.REMIX_RULES = {
+  coldFeet: 'REMIXED: the exit now flees while you are in the AIR. Walk right into it.',
+  shouting: 'REMIXED: signs ending with "..." lie now, and signs that shout "!" tell the truth.',
+  mimic: 'REMIXED: the real exit\'s handle is on the LEFT now. A handle on the right is a mouth.',
+  backwardsFlag: 'REMIXED: the checkpoint only saves if you touch it in mid-air.'
+};
+
+// Level 100: the Game itself. Pull its three plugs while it throws teeth and saws at you.
+function buildBoss(runSeed, diff, ng) {
+  const W = 44, g = new Uint8Array(W * H);
+  const set = (c, row, v) => { if (c >= 0 && c < W && row >= 0 && row < H) g[row * W + c] = v; };
+  const col = (c, top) => { for (let row = top; row < H; row++) set(c, row, GROUND); };
+  for (let row = 0; row < H; row++) { set(0, row, GROUND); set(W - 1, row, GROUND); set(W - 2, row, GROUND); }
+  for (let c = 1; c < W - 2; c++) col(c, 11);
+  for (const [c, top] of [[13, 9], [14, 9], [24, 8], [25, 8], [35, 9], [36, 9]]) col(c, top);
+  const L = {
+    level: 100, seed: hashStr(runSeed + ':boss'), diff, tier: 4, gt: 4, cheats: [], plats: [], signs: [], forks: [], saws: [], mimics: [], tunnels: [],
+    lungers: [], invis: [], coins: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [{ x: (W - 4) * T, y: 11 * T }], hops: 0,
+    start: { x: 2.5 * T, y: 11 * T }, twist: null, ng, remix: SL.remixFor(ng), w: W, salt: 0,
+    boss: { x: 24.5 * T, y: 2.6 * T }, arena: { x0: 9 * T, x1: (W - 3) * T, floor: 11 * T },
+    switches: [{ x: 14 * T, y: 9 * T }, { x: 25 * T, y: 8 * T }, { x: 36 * T, y: 9 * T }]
+  };
+  L.signs.push({ x: 4.5 * T, y: 11 * T, text: diff === 'rage' ? 'pull all three plugs' : 'pull all three plugs. please do not...', lie: false });
+  L.tiles = g;
+  return L;
+}
+
+SL.buildLevel = function (runSeed, level, cheats, diff, opts) {
+  if (level === 100) return buildBoss(runSeed, diff, (opts && opts.ng) || 0);
   for (let salt = 0; salt < 80; salt++) {
-    const L = buildOnce(runSeed, level, cheats, salt, diff);
+    const L = buildOnce(runSeed, level, cheats, salt, diff, opts);
     if (SL.validate(L)) { L.salt = salt; return L; }
   }
   throw new Error('no valid level for ' + runSeed + ' #' + level);

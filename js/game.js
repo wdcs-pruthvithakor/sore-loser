@@ -36,6 +36,9 @@ function World(L, history) {
   this.respawnAt = { x: L.start.x - PW / 2, y: L.start.y - PH };
   this.revealed = new Set();
   this.coinsGot = new Set(); // coins stay grabbed through deaths; banked when you clear
+  this.remix = L.remix || {};
+  this.lens = false; this.shield = 0; this.invuln = 0; this.assisted = false; this.greedy = false;
+  this.lastSafe = null;
   this.seen = {};
   this.discovered = {};
   this.attempt = 0;
@@ -84,6 +87,7 @@ W.reset = function () {
   this.lunge = L.lungers.map(l => ({ x: l.c * T, y: l.row * T, moving: false, moved: 0, passed: false }));
   this.wall = { on: false, x: -1e9 };
   this.quakeT = 2.5;
+  this.bossState = L.boss ? { pressed: L.switches.map(() => false), toothT: 2, sawT: 3.5, saws: [], hurt: 0 } : null;
   this.attempt++;
   this.platMove(0);
 };
@@ -112,8 +116,17 @@ W.platMove = function (dt) {
 
 W.die = function (cause) {
   const p = this.p;
-  if (!p.alive || this.won) return;
+  if (!p.alive || this.won || this.invuln > 0) return;
+  // Bubble consumable: pops instead of you, and puts you back on the last safe ground
+  if (this.shield > 0) {
+    this.shield--; this.invuln = 1.2;
+    this.emit('bubblePop', { x: p.x + PW / 2, y: Math.min(p.y + PH / 2, H * T - 8) });
+    if (this.lastSafe) { p.x = this.lastSafe.x; p.y = this.lastSafe.y; }
+    p.vx = 0; p.vy = 0;
+    return;
+  }
   p.alive = false; p.deadT = 0.45;
+  if (this.greedy && this.coinsGot.size) { this.coinsGot = new Set(); this.emit('coinsLost'); }
   if (this.has[cause]) this.markSeen(cause);
   this.stats.deaths++;
   this.stats.causes[cause] = (this.stats.causes[cause] || 0) + 1;
@@ -152,6 +165,7 @@ W.update = function (dt, input) {
   }
   this.stats.time += dt;
   this.lifeT += dt;
+  if (this.invuln > 0) this.invuln -= dt;
 
   // ----- horizontal (Wrong Way swaps the keys) -----
   let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -284,6 +298,7 @@ W.update = function (dt, input) {
     this.emit('crumble', { x: landedPlat.x + landedPlat.w / 2, y: landedPlat.y });
   }
   if (!p.grounded) p.air += dt; else p.air = 0;
+  if (p.grounded && !p.groundPlat && (p.groundCode === TC.GROUND || p.groundCode === TC.SWIRL || p.groundCode === TC.BRIDGE)) this.lastSafe = { x: p.x, y: p.y };
   p.sq += (1 - p.sq) * Math.min(1, dt * 12);
 
   this.hazards(dt);
@@ -359,6 +374,37 @@ W.hazards = function (dt) {
     }
   }
 
+  // The boss attacks: teeth dropped where you are heading, and saws swept across the floor
+  if (L.boss && p.x > L.arena.x0) {
+    const bs = this.bossState, n = bs.pressed.filter(v => v).length, rage = this.rage ? 0.8 : 1;
+    if (bs.hurt > 0) bs.hurt -= dt;
+    bs.toothT -= dt;
+    if (bs.toothT <= 0) {
+      bs.toothT = [1.2, 0.95, 0.75][n] * rage;
+      // a volley: one where you are heading, the others either side of it
+      const lead = p.x + PW / 2 + p.vx * 0.45;
+      const spread = n === 0 ? [0] : n === 1 ? [-56, 0, 56] : [-84, -28, 28, 84];
+      for (const off of spread) {
+        const tx = Math.max(L.arena.x0 + 16, Math.min(L.arena.x1 - 16, lead + off + (Math.random() - 0.5) * 10));
+        this.teeth.push({ x: tx, y: 90, vy: 0, wait: 0.38, boss: true });
+      }
+      this.emit('bossTooth', { x: lead });
+    }
+    bs.sawT -= dt;
+    if (bs.sawT <= 0) {
+      bs.sawT = [4.4, 3.6, 2.9][n] * rage;
+      const fromLeft = n === 1 ? false : n === 2 ? Math.random() < 0.5 : true;
+      bs.saws.push({ x: fromLeft ? L.arena.x0 : L.arena.x1, y: L.arena.floor - 13, vx: (fromLeft ? 1 : -1) * (320 + n * 90) });
+      this.emit('bossSaw');
+    }
+    for (const sw of bs.saws) {
+      sw.x += sw.vx * dt;
+      const nx = Math.max(pr.x, Math.min(sw.x, pr.x + pr.w)), ny = Math.max(pr.y, Math.min(sw.y, pr.y + pr.h));
+      if ((nx - sw.x) * (nx - sw.x) + (ny - sw.y) * (ny - sw.y) < 11 * 11) return this.die('boss');
+    }
+    bs.saws = bs.saws.filter(sw => sw.x > L.arena.x0 - 40 && sw.x < L.arena.x1 + 40);
+  }
+
   // Spite Coins
   for (let i = 0; i < L.coins.length; i++) {
     if (this.coinsGot.has(i)) continue;
@@ -399,7 +445,7 @@ W.hazards = function (dt) {
     if (th.done) continue;
     if (th.wait > 0) { th.wait -= dt; continue; }
     th.vy += 2600 * dt; th.y += th.vy * dt;
-    if (overlap(pr, { x: th.x - 7, y: th.y + 2, w: 14, h: 18 })) return this.die('ceilingTeeth');
+    if (overlap(pr, { x: th.x - 7, y: th.y + 2, w: 14, h: 18 })) return this.die(th.boss ? 'boss' : 'ceilingTeeth');
     if (SL.isSolid(this.code(Math.floor(th.x / T), Math.floor((th.y + 20) / T)))) { th.done = true; this.emit('toothLand', { x: th.x, y: th.y + 20 }); }
   }
   this.teeth = this.teeth.filter(th => !th.done && th.y < H * T + 40);
@@ -515,8 +561,22 @@ W.cheatChecks = function (dt, input) {
   const pcx = p.x + PW / 2, pcy = p.y + PH / 2;
   const pr = this.rect();
 
+  // ----- the boss: pull its three plugs -----
+  if (L.boss) {
+    const bs = this.bossState;
+    L.switches.forEach((sw, i) => {
+      if (!bs.pressed[i] && overlap(pr, { x: sw.x - 18, y: sw.y - 22, w: 36, h: 22 })) {
+        bs.pressed[i] = true; bs.hurt = 0.6;
+        this.emit('unplug', { x: sw.x, y: sw.y, left: bs.pressed.filter(v => !v).length });
+      }
+    });
+    if (bs.pressed.every(v => v)) { this.won = true; this.emit('win', { boss: true }); }
+    return this.cheatChecksRest(dt, input);
+  }
+
   // ----- exit (Cold Feet) -----
   const d = this.door;
+  const feetOn = this.remix.coldFeet ? !p.grounded : p.grounded; // remixed: it flees from jumps instead
   if (d.hop) {
     d.hop.t += dt / 0.42;
     const k = Math.min(1, d.hop.t);
@@ -526,14 +586,14 @@ W.cheatChecks = function (dt, input) {
   } else {
     const dr = { x: d.x - 15, y: d.y - 44, w: 30, h: 44 };
     if (overlap(pr, dr)) {
-      if (!p.grounded && this.fled > 0) this.discover('coldFeet');
+      if (!feetOn && this.fled > 0) this.discover('coldFeet');
       if (this.has.copycat && this.ghost) this.discover('copycat');
       if (this.has.spikeWall && this.wall.on && p.x - this.wall.x < SL.VIEW_W) this.discover('spikeWall');
       this.won = true;
       this.emit('win', { airborne: !p.grounded });
       return;
     }
-    if (this.has.coldFeet && d.hopsLeft > 0 && p.grounded && Math.abs(pcx - d.x) < 3 * T && Math.abs(pcy - (d.y - 20)) < 3 * T) {
+    if (this.has.coldFeet && d.hopsLeft > 0 && feetOn && Math.abs(pcx - d.x) < 3 * T && Math.abs(pcy - (d.y - 20)) < 3 * T) {
       d.spot++; d.hopsLeft--;
       const s = L.doorSpots[d.spot];
       d.hop = { t: 0, fx: d.x, fy: d.y, tx: s.x, ty: s.y };
@@ -547,7 +607,7 @@ W.cheatChecks = function (dt, input) {
   // ----- checkpoint (Backwards Flag) -----
   const cp = L.checkpoint;
   if (cp && !this.cpReal && overlap(pr, { x: cp.x - 8, y: cp.y - 56, w: 16, h: 56 })) {
-    const fromBehind = p.vx < -20;
+    const fromBehind = this.remix.backwardsFlag ? !p.grounded : p.vx < -20;
     if (!this.has.backwardsFlag || fromBehind) {
       this.cpReal = true;
       this.respawnAt = { x: cp.x - PW / 2, y: cp.y - PH };
@@ -562,6 +622,12 @@ W.cheatChecks = function (dt, input) {
     }
   }
 
+  this.cheatChecksRest(dt, input);
+};
+
+W.cheatChecksRest = function (dt, input) {
+  const p = this.p, L = this.L;
+  const pcx = p.x + PW / 2, pcy = p.y + PH / 2;
   // ----- signs -----
   for (const s of L.signs) {
     const near = Math.abs(pcx - s.x) < 1.4 * T && Math.abs(pcy - (s.y - 20)) < 2 * T;
@@ -602,6 +668,15 @@ W.cheatChecks = function (dt, input) {
       if (SL.isSolid(code)) break;
     }
   }
+};
+
+// Pocket Flag: a checkpoint right where you stand.
+W.plantFlag = function () {
+  const p = this.p;
+  if (!p.alive || !p.grounded || p.groundPlat) return false;
+  this.respawnAt = { x: p.x, y: p.y }; this.cpReal = true;
+  this.emit('plant', { x: p.x + PW / 2, y: p.y + PH });
+  return true;
 };
 
 SL.sawPos = function (sw, t) {

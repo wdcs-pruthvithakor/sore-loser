@@ -90,6 +90,20 @@ SL.VOICE = {
   broke: ['You are {n} coins short. Try dying less. Or more. I do not care.', 'Broke! {n} more coins.', 'Come back with {n} more coins, loser.'],
   bought: ['Pleasure doing business. You still lose, though.', 'Looks great. The spikes will love it.', 'Sold! No refunds. Ever.', 'Stylish. Still dying, but stylish.'],
   shopHello: ['Welcome to my shop. Everything is overpriced.', 'Spend your Spite Coins. Then go lose some more.', 'Look nice while you fail. That is the dream.'],
+  daily: ['Daily Grudge. Same level for everyone. Everyone dies here today.', 'Today\'s level. Your friends already failed it. Probably.', 'One level. All day. Go on.'],
+  boss: [['So. Level 100. You actually came.', 'angry'], ['I am the Game. These are my plugs. Do NOT touch them.', 'glitch'], ['I will throw everything I have at you.', 'glitch']],
+  unplug1: ['HEY. Put that back.', 'That was load-bearing!', 'Ow. OW.'],
+  unplug2: ['Two? TWO?', 'I can still win this. I always win.', 'Stop pulling things!'],
+  unplug3: ['n o', 'wait wait wait'],
+  bossDown: 'f i n e',
+  ending: ['You beat every trap I had.', 'I cheated, and you learned the cheats. I hate that. I respect it. I hate that I respect it.', 'But here is the thing about a sore loser.', 'It always wants a rematch.'],
+  ngStart: ['New Game+{n}. I rewrote some rules. You will not like the new ones.', 'Round {n}+1. I remember everything you did.', 'NG+{n}. Same me. Worse me.'],
+  skipped: ['You skipped. That is the saddest thing I have ever seen.', 'A ticket? Really? Fine. Next.'],
+  assisted: ['You used an item. That one does not count. To me.', 'Assisted. I am telling everyone.', 'With help. Noted in your file.'],
+  usedItem: ['Cheater. Wait. That is my thing.', 'Oh, we are using items now?', 'Using items? In MY game?'],
+  boughtCons: ['Items! For people who cannot win alone.', 'Sold. I will remember this.', 'Enjoy your little crutch.'],
+  coinsLost: ['Butterfingers! Drop your coins.', 'Your coins! Gone. Hehe.'],
+  shareQuote: ['you again.', 'stop sharing this.', 'it was rigged. by me.', 'I let you win. (I did not.)'],
   newRun: ['A new run! Same old me.', 'Starting over? I kept your file.']
 };
 

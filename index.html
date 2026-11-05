@@ -9,7 +9,7 @@
 <meta name="description" content="A cute little platformer that cheats. It moves the exit, lies on its signs and fakes its spikes, but every cheat follows a rule. Learn the rules, then beat it.">
 <meta name="theme-color" content="#1c1226">
 <link rel="preload" href="fonts/Fredoka-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=7">
+<link rel="stylesheet" href="css/style.css?v=10">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='24' rx='7' fill='%23ffcb3d' stroke='%233b2a40' stroke-width='2.5'/%3E%3Ccircle cx='11' cy='15' r='2.5' fill='%233b2a40'/%3E%3Cpath d='M18 13l5 2-5 2' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3Cpath d='M10 21q6 4 12-1' fill='none' stroke='%233b2a40' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -72,6 +72,10 @@
       <div class="menu">
         <button type="button" class="btn primary big" id="t-play">Play</button>
         <div class="menu-row">
+          <button type="button" class="btn daily-btn" id="t-daily">Daily Grudge <i id="t-daily-n">new</i></button>
+          <button type="button" class="btn" id="t-pacts">Pacts <i id="t-pacts-n">off</i></button>
+        </div>
+        <div class="menu-row">
           <button type="button" class="btn" id="t-sheet">Cheat Sheet <i id="t-sheet-n">0/18</i></button>
           <button type="button" class="btn" id="t-dossier">Your Dossier</button>
         </div>
@@ -93,6 +97,7 @@
         <p id="t-confirm-msg">Start again from level 1 with a new seed? Your Cheat Sheet and Dossier stay.</p>
         <div class="menu-row"><button type="button" class="btn primary" id="t-confirm-yes">New run</button><button type="button" class="btn" id="t-confirm-no">Keep going</button></div>
       </div>
+      <div class="rank"><span id="t-rank">Loser Rank 1</span><div class="bar"><i id="t-rank-bar"></i></div></div>
       <dl class="title-stats">
         <div><dt>Best</dt><dd id="t-best">1</dd></div>
         <div><dt>Deaths</dt><dd id="t-deaths">0</dd></div>
@@ -159,8 +164,43 @@
       </header>
       <p class="shop-say" id="shop-say"></p>
       <div class="seg tabs" id="shop-tabs"></div>
+      <p class="shop-note" id="shop-note"></p>
       <div class="items" id="shop-items"></div>
       <p class="panel-foot">Earn Spite Coins by clearing levels (Hard ×1.5, Rage ×2.5), grabbing coins, not dying, and from trophies. Looks only: nothing here makes the game easier.</p>
+    </div>
+  </section>
+
+  <!-- Pacts -->
+  <section id="s-pacts" class="screen" hidden>
+    <div class="panel pacts">
+      <header class="panel-h">
+        <div>
+          <p class="eyebrow">Sign here · and here · and here</p>
+          <h2>Grudge Pacts</h2>
+        </div>
+        <div class="wallet"><b id="pact-mult">×1</b></div>
+        <button type="button" class="x" data-close aria-label="Close">×</button>
+      </header>
+      <p class="panel-foot">Make your run worse on purpose. Every pact you sign multiplies the coins you earn. They apply from the next level and stay on until you tear them up.</p>
+      <div class="pact-list" id="pact-list"></div>
+    </div>
+  </section>
+
+  <!-- Ending -->
+  <section id="s-end" class="screen" hidden>
+    <div class="panel ending">
+      <p class="eyebrow">Level 100</p>
+      <h2 id="e-title">Fine. You win.</h2>
+      <div class="e-text" id="e-text"></div>
+      <dl class="clear-stats" id="e-stats"></dl>
+      <div class="menu">
+        <button type="button" class="btn primary big" id="e-ng">Start New Game+1</button>
+        <p class="e-ng-sub" id="e-ng-sub"></p>
+        <div class="menu-row">
+          <button type="button" class="btn" id="e-keep">Keep climbing (101+)</button>
+          <button type="button" class="btn ghost" id="e-title">Title</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -195,11 +235,13 @@
       <div class="used" id="c-used"></div>
       <div class="menu-row">
         <button type="button" class="btn primary big" id="c-next">Next level <kbd>Enter</kbd></button>
+        <button type="button" class="btn big" id="c-share" hidden>Copy result</button>
       </div>
       <div class="menu-row">
         <button type="button" class="btn small" id="c-sheet">Cheat Sheet</button>
         <button type="button" class="btn small" id="c-dossier">Dossier</button>
         <button type="button" class="btn small" id="c-shop">Shop</button>
+        <button type="button" class="btn small" id="c-pacts">Pacts</button>
         <button type="button" class="btn small ghost" id="c-title">Title</button>
       </div>
     </div>
@@ -218,6 +260,8 @@
           <button type="button" class="btn small" id="p-dossier">Dossier</button>
           <button type="button" class="btn small" id="p-shop">Shop</button>
         </div>
+        <div class="p-items" id="p-items"></div>
+        <p class="p-items-note" id="p-items-note"></p>
         <button type="button" class="btn small" id="p-sound" aria-pressed="true">Sound on</button>
         <button type="button" class="btn ghost small" id="p-title">Quit to title</button>
       </div>
@@ -225,13 +269,13 @@
   </section>
 </div>
 
-<script src="js/core.js?v=7"></script>
-<script src="js/profile.js?v=7"></script>
-<script src="js/game.js?v=7"></script>
-<script src="js/voice.js?v=7"></script>
-<script src="js/audio.js?v=7"></script>
-<script src="js/cosmetics.js?v=7"></script>
-<script src="js/render.js?v=7"></script>
-<script src="js/main.js?v=7"></script>
+<script src="js/core.js?v=10"></script>
+<script src="js/profile.js?v=10"></script>
+<script src="js/game.js?v=10"></script>
+<script src="js/voice.js?v=10"></script>
+<script src="js/audio.js?v=10"></script>
+<script src="js/cosmetics.js?v=10"></script>
+<script src="js/render.js?v=10"></script>
+<script src="js/main.js?v=10"></script>
 </body>
 </html>

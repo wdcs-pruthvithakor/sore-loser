@@ -26,7 +26,7 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
 - **Cheats** (18): Cold Feet, False Floor, Rotten Platforms, Pinholes, Mimic, Invisible Block, Shouting Signs,
   Ceiling Teeth, Runaway Floor, Headache Block, Lunging Spike, Shy Ledge, Secret Floor, Wrong Way, Impatient Floor,
   Backwards Flag, Copycat, Spike Wall. Rules are in `SL.CHEATS`.
-- **Difficulty modes** (`SL.DIFFS`): Normal (tells fade as levels rise), Hard (faint tells, +1 cheat, layouts one
+- **Difficulty modes** (`SL.DIFFS`, one separate run per mode; switching never loses progress): Normal (tells fade as levels rise), Hard (faint tells, +1 cheat, layouts one
   tier meaner), Rage (no tells at all, +2 cheats, layouts two tiers meaner, signs drop their punctuation).
 - **Twists** (`SL.TWISTS`): from level 6 a level may get ice, lights out, low gravity, fast forward, earthquake or
   (late) a mirrored screen.
@@ -37,9 +37,20 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
   51+ four or five (plus the mode bonus). New cheats are introduced one per level. Respawn is instant.
 - **Mobile**: multi-touch controls (slide a finger between buttons), a zoomed-in view when held upright, corner
   controls in landscape, fullscreen and landscape lock on Play where the browser allows. `?touch=1` forces touch UI.
-- **Spite Coins, shop and trophies** (`js/cosmetics.js`): coins come from clearing levels (Hard ×1.5, Rage ×2.5),
-  coins placed in risky spots, deathless clears, trophies, and pity coins every 50 deaths. They buy skins, hats,
-  trails and death effects. Some items only come from trophies. Cosmetic only: nothing changes how a level plays.
+- **Spite Coins, shop and trophies** (`js/cosmetics.js`): coins come from clears (Hard ×1.5, Rage ×2.5, pacts and
+  NG+ multiply further), coins placed in risky spots, deathless clears, trophies, rank-ups, mastery and pity coins
+  every 50 deaths. The shop has permanent stock, four rotating "Today" items, hat dyes, pins, consumables and the
+  Grudge Box (stated odds, pity at 12). Cosmetics never change how a level plays.
+- **Consumables**: Snitch Lens, Bubble, Pocket Flag, Skip Ticket, used from the pause menu. Using one marks the level
+  Assisted: half pay, no trophies or mastery, and none allowed in the Daily.
+- **Daily Grudge**: one seeded Hard level per day (same for everyone), streak bonus, copy-paste result card.
+- **Grudge Pacts**: opt-in punishments (+1 cheat, no checkpoints, forced Copycat/Spike Wall, blackout, coin drop)
+  that multiply payouts.
+- **Cheat mastery**: Bronze/Silver/Gold at 5/25/75 clears with a cheat; Gold unlocks that cheat's pin.
+- **Loser Rank**: lifetime XP (deaths count) with titles and coin rewards; never maxes out.
+- **Level 100 and New Game+**: level 100 is a boss fight against the Game (pull its three plugs). Beating it unlocks
+  NG+, which restarts at level 1 with +1 cheat, meaner layouts, bigger pay, and remixed rules (NG+1: Cold Feet and
+  Shouting Signs flip; NG+2: Mimic and Backwards Flag flip). It repeats forever.
 - **Behaviour tracking, no AI** (`js/profile.js`): counts jumps, standing still, sign trust, checkpoint use and
   death causes. The Cheat Director weights cheats by those habits. The Dossier screen shows what it sees.
 - **Cheat Sheet**: a cheat is "spotted" when it triggers on you and "cracked" when you beat it on purpose.
