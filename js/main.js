@@ -22,12 +22,40 @@ function fresh() {
 // stamped MODIFIED. It stops casual editing; the formula is in this file, so it is not real security.
 const CODE_SALT = 'sore-loser:grudge:v2';
 const fingerprint = json => (SL.hashStr(CODE_SALT + json) ^ SL.hashStr(json + json.length + CODE_SALT)).toString(36);
-const KEY_FP = KEY + '_fp', KEY_GOOD = KEY + '_good', KEY_GOOD_FP = KEY + '_good_fp';
+const KEY_FP = KEY + '_fp', KEY_CACHE = 'soreloser_cache';
 let tamper = null; // 'restored' | 'modified' | null
+// The honest backup is scrambled with a keystream and carries its own fingerprint inside, so it reads as
+// noise and changing any character of it breaks it. (The key is in this file: it raises the bar, nothing more.)
+const SCRAMBLE_KEY = 'grudge-cache:7f3a';
+function scramble(text, nonce) {
+  const bytes = new TextEncoder().encode(text), r = SL.rng(SL.hashStr(SCRAMBLE_KEY + nonce));
+  for (let i = 0; i < bytes.length; i++) bytes[i] ^= Math.floor(r() * 256);
+  let bin = ''; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  return btoa(bin);
+}
+function unscramble(b64, nonce) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length), r = SL.rng(SL.hashStr(SCRAMBLE_KEY + nonce));
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) ^ Math.floor(r() * 256);
+  return new TextDecoder().decode(bytes);
+}
+function writeCache(json) {
+  const nonce = Math.random().toString(36).slice(2, 10);
+  localStorage.setItem(KEY_CACHE, nonce + '.' + scramble(fingerprint(json) + '|' + json, nonce));
+}
+// Returns the honest JSON from the scrambled backup, or null if it is missing or has been touched.
+function readCache() {
+  try {
+    const raw = localStorage.getItem(KEY_CACHE); if (!raw) return null;
+    const dot = raw.indexOf('.'); const text = unscramble(raw.slice(dot + 1), raw.slice(0, dot));
+    const bar = text.indexOf('|'); const fp = text.slice(0, bar), json = text.slice(bar + 1);
+    return fingerprint(json) === fp ? json : null;
+  } catch (e) { return null; }
+}
 function writeSave(obj) {
-  const json = JSON.stringify(obj), fp = fingerprint(json);
-  localStorage.setItem(KEY, json); localStorage.setItem(KEY_FP, fp);
-  localStorage.setItem(KEY_GOOD, json); localStorage.setItem(KEY_GOOD_FP, fp);
+  const json = JSON.stringify(obj);
+  localStorage.setItem(KEY, json); localStorage.setItem(KEY_FP, fingerprint(json));
+  writeCache(json);
+  localStorage.removeItem(KEY + '_good'); localStorage.removeItem(KEY + '_good_fp'); // the old plain backup
 }
 function load() {
   try {
@@ -39,8 +67,10 @@ function load() {
     if (fp === null) return Object.assign(fresh(), s); // saves from before fingerprints: trusted once
     if (fingerprint(json) === fp) return Object.assign(fresh(), s);
     // edited: bring back the last honest copy if it is intact
-    const good = localStorage.getItem(KEY_GOOD), goodFp = localStorage.getItem(KEY_GOOD_FP);
-    if (good && goodFp && fingerprint(good) === goodFp) {
+    let good = readCache();
+    // saves from the previous version kept a plain backup; still honour it once
+    if (!good) { const g = localStorage.getItem(KEY + '_good'), gf = localStorage.getItem(KEY + '_good_fp'); if (g && gf && fingerprint(g) === gf) good = g; }
+    if (good) {
       const g = JSON.parse(good);
       g.caught = (g.caught || 0) + 1;
       tamper = 'restored';
@@ -54,7 +84,7 @@ function load() {
   return fresh();
 }
 let save = load();
-try { if (localStorage.getItem(KEY) && localStorage.getItem(KEY_FP) === null) persist(); } catch (e) { /* storage blocked */ } // fingerprint older saves right away
+try { if (localStorage.getItem(KEY) && !tamper && (localStorage.getItem(KEY_FP) === null || !localStorage.getItem(KEY_CACHE))) persist(); } catch (e) { /* storage blocked */ } // older saves get a fingerprint and a scrambled backup right away
 // Older saves can name cheats that were retired; drop them.
 if (!SL.DIFFS[save.diff]) save.diff = 'normal';
 save.stats2 = Object.assign({ clean: 0, hard: 0, rage: 0, maxDeathsCleared: 0, fastest: 0, twists: {}, grabbed: 0, dailies: 0, bestStreak: 0, maxPacts: 0, boxes: 0, endings: 0, maxNgBeaten: -1 }, save.stats2);

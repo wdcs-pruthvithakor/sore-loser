@@ -67,7 +67,8 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
 - **Settings**: music and sound volume, screen shake, flashes/glitches, narrator, and save codes
   (tamper-checked; a loaded save is stamped IMPORTED on share cards and its Daily streak resets, so shared
   saves are worthless for bragging). Every save has a permanent Player ID shown on its cards.
-- **Tamper check**: saves are written with a fingerprint plus a fingerprinted copy of the last honest save.
+- **Tamper check**: saves are written with a fingerprint plus a scrambled copy of the last honest save
+  (`soreloser_cache`, with its own fingerprint sealed inside).
   Editing the save in browser storage brings the honest copy back with an "I SAW THAT." scene; editing both
   copies keeps the save but stamps it MODIFIED on every share card. It stops casual editing only (the formula
   is in the client), and Times caught is shown in the Dossier.
