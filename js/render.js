@@ -16,6 +16,109 @@ const PAL = [
 ];
 SL.PAL = PAL;
 
+// ---------- themes ----------
+// Each theme is a daytime palette and a night palette; levels blend toward night as tiers rise.
+// Normal, Hard and Rage each start in their own world, and every New Game+ moves that mode somewhere new.
+const keys = ['skyA', 'skyB', 'far', 'near', 'grass', 'grassD', 'dirt', 'dirtD', 'dot', 'sun', 'cloud', 'plat', 'platD', 'ink', 'door', 'doorD'];
+const mk = a => { const o = { body: '#ffcb3d' }; keys.forEach((k, i) => { o[k] = a[i]; }); return o; };
+SL.THEMES = {
+  meadow: { name: 'The Meadow', ambient: null, tiers: PAL },
+  canyon: { name: 'Sunburnt Canyon', ambient: 'dust',
+    day: mk(['#ffb38a', '#ffe8c8', '#e8a27a', '#cc7a52', '#d9a441', '#a8762a', '#c8643c', '#94401f', '#a8502c', '#fff2b0', '#fff4e6', '#7ec8c0', '#4c9a92', '#3b2a40', '#3fb5a8', '#23857a']),
+    night: mk(['#2a1638', '#a0485a', '#5a2a40', '#3e1c30', '#c27a3a', '#8a4f22', '#6a2c2c', '#45181c', '#5a2224', '#ffd6c0', '#7a3a52', '#4fd1c5', '#2a8a80', '#1a0f20', '#4fd1c5', '#2a8a80']) },
+  inferno: { name: 'The Inferno', ambient: 'embers',
+    day: mk(['#3a0a12', '#c2401c', '#5a1418', '#3a0c10', '#ff7a1a', '#c43c0a', '#2a1a1e', '#160c10', '#3c2228', '#ffcf70', '#5a1e1e', '#ffb020', '#c0700a', '#120608', '#ff4f3a', '#a82418']),
+    night: mk(['#0a0204', '#5a0a0a', '#240608', '#160406', '#ff3a10', '#a01808', '#150a0c', '#080304', '#24100f', '#ff8a5a', '#2a0808', '#ff7a1a', '#a8400a', '#050102', '#ff2a2a', '#901010']) },
+  candy: { name: 'Candy Land', ambient: 'sprinkles',
+    day: mk(['#ffc4e8', '#e4f6ff', '#c8b4ff', '#ffa8d4', '#9ff2e0', '#5cc8b4', '#ffd4a8', '#e8a07a', '#ff8fc0', '#fff8c8', '#ffffff', '#8ed0ff', '#5a9ce0', '#4a2a5a', '#ff6fb0', '#c43f80']),
+    night: mk(['#2e1a5a', '#c86aa8', '#5a3a8a', '#7a3a7a', '#6fe8d0', '#30a894', '#a86a8a', '#704060', '#ff8fc0', '#ffe4f4', '#8a5aa8', '#ff8fc0', '#c0508a', '#1e0e2e', '#ffd84d', '#c49a1c']) },
+  frost: { name: 'Frostbite Peaks', ambient: 'snow',
+    day: mk(['#a8d8ff', '#f0f8ff', '#c8e0f0', '#a0c4dc', '#f4fbff', '#b8d8ec', '#7a9ab8', '#4f6c8a', '#6a88a8', '#ffffff', '#ffffff', '#c9f1ff', '#7ab8d8', '#23314a', '#5aa0ff', '#2f6ac0']),
+    night: mk(['#0a1430', '#3a5a8a', '#1e2e50', '#142240', '#d8ecff', '#7a9cc0', '#2a3a5a', '#18243c', '#34486c', '#e4f0ff', '#3a4e78', '#8ed0ff', '#3a7ab0', '#060a18', '#8ed0ff', '#3a7ab0']) },
+  deep: { name: 'The Deep', ambient: 'bubbles',
+    day: mk(['#0e8aa0', '#7ee0d8', '#1a9a9a', '#147a80', '#ff8f7a', '#d0584a', '#e8d4a0', '#b89c64', '#c8a870', '#d8fff8', '#a8f0e8', '#ffb04a', '#c87a1a', '#0e2a36', '#ffcb3d', '#c4921a']),
+    night: mk(['#02101c', '#0a4a5a', '#06303a', '#04222c', '#ff5a8a', '#b02a5a', '#3a3a4a', '#20202c', '#4a4a5c', '#7ef0ff', '#0a3a48', '#4df0b8', '#1a9a70', '#000a10', '#4df0b8', '#1a9a70']) },
+  synth: { name: 'Synthwave', ambient: 'grid',
+    day: mk(['#1a0a3a', '#ff5ab0', '#5a1a7a', '#2a0a4a', '#4df0ff', '#1a90c0', '#20103a', '#100620', '#3a1a5a', '#ffd84d', '#7a2a9a', '#ff4fd8', '#a01a90', '#08020f', '#4df0ff', '#1a90c0']),
+    night: mk(['#05010d', '#5a0a6a', '#2a0a40', '#140420', '#ff4fd8', '#a01a90', '#10061e', '#06020c', '#2a0e40', '#ff9ad8', '#3a0a50', '#4df0ff', '#1a90c0', '#020005', '#ff4fd8', '#a01a90']) }
+};
+SL.THEMES.graveyard = { name: 'Dead Hollow', ambient: 'fog',
+  day: mk(['#5a6a6a', '#a8b4a8', '#4a5a54', '#36443e', '#7a8a5a', '#4e5c3a', '#4a4440', '#2e2a28', '#3c3632', '#e8eedc', '#8a9690', '#a49dba', '#6e6788', '#151815', '#8fbf7a', '#557a48']),
+  night: mk(['#0c1210', '#34443c', '#1c2622', '#121a16', '#4e6a3a', '#2c3e22', '#221e1c', '#121010', '#1e1a18', '#c8f0c0', '#2a3630', '#7a7090', '#4a4466', '#050605', '#7aff9a', '#2f8a4a']) };
+SL.THEMES.hive = { name: 'The Hive', ambient: 'drip',
+  day: mk(['#3a0a1a', '#a8304a', '#5a1428', '#3e0c1c', '#e0506a', '#a02a44', '#5a1a28', '#3a0e18', '#7a2436', '#ffd0c0', '#6a1e30', '#ffb0a0', '#c86a64', '#140408', '#ffd84d', '#c49a1c']),
+  night: mk(['#0e0206', '#4a0a18', '#24060e', '#160308', '#c02040', '#700a20', '#2a0810', '#160406', '#40101c', '#ff8a8a', '#30081a', '#ff6a7a', '#a02a3a', '#060102', '#ffd84d', '#a07a10']) };
+SL.THEMES.void = { name: 'The Void', ambient: 'static',
+  day: mk(['#08080c', '#24202e', '#14121a', '#0c0a10', '#e8e8f0', '#9a98a8', '#16141c', '#0a090e', '#22202a', '#ff2a3a', '#1c1a24', '#ff2a3a', '#901020', '#000000', '#ff2a3a', '#901020']),
+  night: mk(['#000000', '#120a12', '#08060a', '#040306', '#ff2a3a', '#901020', '#0c0a10', '#050407', '#16121a', '#ff0018', '#100c14', '#ffffff', '#8a8a96', '#000000', '#ffffff', '#8a8a96']) };
+// ---- worlds only Hard and Rage visit ----
+SL.THEMES.swamp = { name: 'Rotmire Swamp', ambient: 'fog',
+  day: mk(['#4a5a3a', '#9aa86a', '#3e4e2e', '#2e3c22', '#7a9a3a', '#4e6a22', '#3a3424', '#241f14', '#4a4028', '#e4f0a0', '#7a8a5a', '#c8a04a', '#8a6a24', '#121808', '#b8e04a', '#6a8a1a']),
+  night: mk(['#0a1006', '#2a3a1a', '#16200e', '#0e1608', '#4e7a1a', '#2a4a0a', '#1a1810', '#0c0a06', '#24200e', '#c8ff6a', '#1e2a12', '#a07a2a', '#5a4010', '#030502', '#9aff3a', '#3a8a0a']) };
+SL.THEMES.rust = { name: 'The Rust Works', ambient: 'embers',
+  day: mk(['#6a4a3a', '#c8946a', '#5a3e30', '#3e2a22', '#a86a3a', '#6e3e1a', '#4a3e3a', '#2a2220', '#6a5048', '#ffd8a0', '#8a6a5a', '#8ab8c8', '#4a7a8a', '#160e0a', '#ffb020', '#b8700a']),
+  night: mk(['#140a08', '#4a2a1e', '#24140e', '#160c08', '#c8501a', '#7a2a0a', '#221a18', '#100c0a', '#30241e', '#ffa060', '#2a1a14', '#5a9ab0', '#2a5a6a', '#050302', '#ff7a1a', '#a03a0a']) };
+SL.THEMES.storm = { name: 'Stormbreak Cliffs', ambient: 'rain',
+  day: mk(['#3a4a5e', '#8a9aae', '#324050', '#24303e', '#6a8a7a', '#3e5a4e', '#4a4e58', '#2a2e36', '#5a5e6a', '#e8f0ff', '#6a7a8e', '#e0c060', '#a08020', '#0c1018', '#ffe04a', '#c0a010']),
+  night: mk(['#06080e', '#1e2a3e', '#10161e', '#0a0e14', '#3a5a4e', '#1e3a2e', '#1a1e26', '#0a0c10', '#24282e', '#b0c8ff', '#141c28', '#ffd040', '#a07a10', '#020306', '#ffe04a', '#a08a10']) };
+SL.THEMES.cathedral = { name: 'Blood Cathedral', ambient: 'drip',
+  day: mk(['#1a0610', '#6a1a2a', '#2a0a14', '#1a060c', '#d4a040', '#8a6418', '#2a1a1e', '#140a0e', '#3a2228', '#ffd27a', '#3a0e1a', '#d4a040', '#8a6418', '#080204', '#ff2a3a', '#8a0a18']),
+  night: mk(['#050103', '#2a0610', '#120306', '#0a0204', '#a07820', '#5a400a', '#140c0e', '#080406', '#22121a', '#ff5a3a', '#1a050a', '#b08020', '#6a4a0a', '#020001', '#ff0a2a', '#700010']) };
+SL.THEMES.bones = { name: 'The Ossuary', ambient: 'dust',
+  day: mk(['#2a2622', '#7a6e62', '#3a342e', '#26221e', '#e8dcc8', '#a8987e', '#3e3832', '#22201c', '#cfc2aa', '#fff4e0', '#5a524a', '#e8dcc8', '#a8987e', '#0c0a08', '#ff3a2a', '#901a10']),
+  night: mk(['#060504', '#2a2420', '#14110e', '#0a0806', '#c8b89c', '#7a6a52', '#1a1612', '#0a0806', '#9a8a70', '#ff4a3a', '#1e1a16', '#c8b89c', '#7a6a52', '#000000', '#ff1a1a', '#800808']) };
+
+// Every mode has its own five worlds, never shared with another mode:
+// Normal gets the cute ones, Hard the grim ones, Rage the evil ones. One step per New Game+.
+SL.THEME_ROUTE = {
+  normal: ['meadow', 'candy', 'frost', 'deep', 'synth'],
+  hard: ['canyon', 'swamp', 'graveyard', 'rust', 'storm'],
+  rage: ['inferno', 'void', 'hive', 'cathedral', 'bones']
+};
+// After all five, the route loops, but each loop is a twisted version: shifted colours and a darker name.
+SL.LOOP_NAMES = ['', 'Corrupted', 'Fallen', 'Shattered', 'Forsaken', 'Hollow', 'Final'];
+SL.themeFor = (diff, ng) => { const r = SL.THEME_ROUTE[diff] || SL.THEME_ROUTE.normal; return r[(ng || 0) % r.length]; };
+SL.themeLoop = (diff, ng) => Math.floor((ng || 0) / (SL.THEME_ROUTE[diff] || SL.THEME_ROUTE.normal).length);
+SL.themeName = function (diff, ng) {
+  const base = SL.THEMES[SL.themeFor(diff, ng)].name.replace(/^The /, ''), loop = SL.themeLoop(diff, ng);
+  if (!loop) return SL.THEMES[SL.themeFor(diff, ng)].name;
+  const word = SL.LOOP_NAMES[Math.min(loop, SL.LOOP_NAMES.length - 1)];
+  return `${word} ${base}${loop > SL.LOOP_NAMES.length - 1 ? ' ' + (loop - SL.LOOP_NAMES.length + 2) : ''}`;
+};
+// Menace: how evil the world looks. Hard starts mean, Rage starts nasty, and every New Game+ adds more. No cap.
+SL.menaceFor = (diff, ng) => ({ normal: 0, hard: 2, rage: 4 }[diff] || 0) + (ng || 0) * 1.5;
+const BLOOD = mk(['#12000a', '#5a0814', '#2a060e', '#1a0408', '#8a1422', '#5a0a16', '#2a1014', '#160608', '#3a1418', '#ff3040', '#3a0a12', '#000000', '#000000', '#000000', '#000000', '#000000']);
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const c = [16, 8, 0].map(sh => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t));
+  return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function hueShift(hex, deg) {
+  let r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  let h = 0, sat = 0;
+  if (mx !== mn) {
+    const d = mx - mn; sat = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60;
+  }
+  h = (h + deg + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m0 = l - c / 2;
+  const [rr, gg, bb] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [rr, gg, bb].map(v => Math.round((v + m0) * 255).toString(16).padStart(2, '0')).join('');
+}
+SL.paletteFor = function (themeId, tier, menace, loop) {
+  const th = SL.THEMES[themeId] || SL.THEMES.meadow;
+  let o;
+  if (th.tiers) o = Object.assign({}, th.tiers[tier]);
+  else { const t = Math.pow(tier / 4, 0.9); o = { body: '#ffcb3d' }; for (const k of keys) o[k] = mixHex(th.day[k], th.night[k], t); }
+  // a looped world comes back twisted: its colours turned around the wheel
+  if (loop) { const deg = [0, 150, 70, 220, 290, 110][loop % 6] + Math.floor(loop / 6) * 37; for (const k of ['skyA', 'skyB', 'far', 'near', 'grass', 'grassD', 'dirt', 'dirtD', 'dot', 'cloud', 'plat', 'platD']) o[k] = hueShift(o[k], deg); }
+  // menace bleeds the world toward blood and dark (platforms, doors and outlines stay readable)
+  const a = Math.min(0.32, (menace || 0) * 0.06);
+  if (a > 0) for (const k of ['skyA', 'skyB', 'far', 'near', 'grass', 'grassD', 'dirt', 'dirtD', 'dot', 'sun', 'cloud']) o[k] = mixHex(o[k], BLOOD[k], a);
+  return o;
+};
+
 function cellHash(c, r) { let h = (c * 374761393 + r * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 
 function Renderer(cv) {
@@ -50,7 +153,14 @@ R.tell = function (arr) {
 R.setWorld = function (w) {
   this.w = w; this.parts = [];
   const L = w.L;
-  this.pal = PAL[L.tier];
+  this.themeId = L.theme || SL.themeFor(L.diff, L.ng);
+  this.theme = SL.THEMES[this.themeId];
+  this.menace = L.menace !== undefined ? L.menace : SL.menaceFor(L.diff, L.ng);
+  this.pal = SL.paletteFor(this.themeId, L.tier, this.menace, L.theme ? 0 : SL.themeLoop(L.diff, L.ng));
+  const er = SL.rng(L.seed ^ 0x2c1b3c6d);
+  this.eyes = [];
+  for (let i = 0; i < Math.min(40, Math.floor(Math.max(0, this.menace - 2.5) * 5)); i++) this.eyes.push({ x: er() * 2400, y: 150 + er() * 200, s: 0.6 + er() * 0.8, ph: er() * 20, p: 0.12 + er() * 0.2 });
+  this.amb = [];
   const r = SL.rng(L.seed ^ 0x5bd1e995);
   this.clouds = [];
   for (let i = 0; i < 9; i++) this.clouds.push({ x: r() * 1600, y: 30 + r() * 140, s: 0.6 + r() * 0.9, p: 0.08 + r() * 0.18 });
@@ -155,6 +265,8 @@ R.draw = function (dt, opts) {
   this.drawTiles(ctx, w, c0, c1);
   this.drawPlats(ctx, w);
   this.drawSaws(ctx, w);
+  for (const cr of L.crushers) if (cr.x > this.cam - 80 && cr.x < this.cam + VW + 20) this.drawCrusher(ctx, cr, w.t);
+  for (const wv of L.waves) if (wv.c1 * T > this.cam - 40 && wv.c0 * T < this.cam + VW + 40) this.drawWave(ctx, wv, w.t);
   this.drawCheckpoint(ctx, w);
   w.L.mimics.forEach((m, i) => { if (m.x > this.cam - 60 && m.x < this.cam + VW + 60) this.drawMimic(ctx, w, m, i); });
   for (const th of w.teeth) this.drawTooth(ctx, th);
@@ -175,6 +287,7 @@ R.draw = function (dt, opts) {
   if (w.wall.on) this.drawWall(ctx, w);
   for (const s of L.signs) if (s.near && p.alive) this.drawBubble(ctx, s);
   ctx.restore();
+  this.drawAmbient(ctx, dt);
   if (L.twist === 'dark') {
     const px = (p.x + SL.PW / 2 - this.cam), py = p.y + SL.PH / 2;
     const g = ctx.createRadialGradient(px, py, 40, px, py, 190);
@@ -188,12 +301,13 @@ R.draw = function (dt, opts) {
     ctx.fillStyle = 'rgba(0,0,0,0.05)';
     for (let y = 0; y < VH; y += 3) ctx.fillRect(0, y, VW, 1);
   }
-  const ambient = tier >= 2 && Math.random() < [0, 0, 0.002, 0.006, 0.012][tier];
+  const ambient = (tier >= 2 || (this.menace || 0) >= 3) && Math.random() < [0, 0, 0.002, 0.006, 0.012][tier] + Math.max(0, (this.menace || 0) - 3) * 0.003;
   if (ambient) this.glitch = Math.max(this.glitch, 0.06);
   if (this.glitch > 0) { this.glitch -= dt; this.drawGlitch(ctx); }
   const vg = ctx.createRadialGradient(VW / 2, VH / 2, VH * 0.35, VW / 2, VH / 2, VW * 0.65);
   vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, `rgba(20,0,30,${0.08 + tier * 0.07})`);
+  const mn = this.menace || 0;
+  vg.addColorStop(1, mn >= 1 ? `rgba(${Math.min(90, 20 + mn * 10)},0,${Math.max(5, 30 - mn * 4)},${Math.min(0.6, 0.12 + tier * 0.07 + mn * 0.05)})` : `rgba(20,0,30,${0.08 + tier * 0.07})`);
   ctx.fillStyle = vg; ctx.fillRect(0, 0, VW, VH);
 };
 
@@ -203,7 +317,14 @@ R.drawSky = function (ctx, pal, tier) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
   // sun or moon
   const sunX = 680 - this.cam * 0.03, sunY = 90 + tier * 12;
-  ctx.fillStyle = pal.sun;
+  const m = this.menace || 0;
+  if (m >= 2) {
+    // a blood moon instead of a sun, with a glow that grows with menace
+    const g = ctx.createRadialGradient(sunX, sunY, 20, sunX, sunY, 70 + m * 8);
+    g.addColorStop(0, 'rgba(255,40,50,0.45)'); g.addColorStop(1, 'rgba(255,40,50,0)');
+    ctx.fillStyle = g; ctx.fillRect(sunX - 200, sunY - 200, 400, 400);
+  }
+  ctx.fillStyle = m >= 2 ? '#c8202c' : pal.sun;
   ctx.globalAlpha = 0.9;
   ctx.beginPath(); ctx.arc(sunX, sunY, 38, 0, Math.PI * 2); ctx.fill();
   if (tier >= 3) { ctx.fillStyle = pal.skyA; ctx.beginPath(); ctx.arc(sunX + 16, sunY - 8, 32, 0, Math.PI * 2); ctx.fill(); }
@@ -217,10 +338,82 @@ R.drawSky = function (ctx, pal, tier) {
     const x = ((c.x - this.cam * c.p + this.time * 6 * c.p) % 1700 + 1700) % 1700 - 200;
     this.cloud(ctx, x, c.y, c.s, pal.cloud);
   }
-  // hills
-  this.hills(ctx, 0.15, 300, 60, pal.far, 0.004);
-  this.hills(ctx, 0.35, 360, 50, pal.near, 0.007);
+  const amb = this.theme && this.theme.ambient;
+  if (amb === 'grid') {
+    // synthwave sun stripes and a perspective grid behind the hills
+    ctx.fillStyle = pal.skyA;
+    for (let i = 0; i < 5; i++) ctx.fillRect(sunX - 40, sunY + 4 + i * 7, 80, 2 + i * 0.6);
+    ctx.strokeStyle = 'rgba(255,79,216,0.35)'; ctx.lineWidth = 1.5;
+    const hz = 300, off = (this.cam * 0.4) % 60;
+    for (let i = -12; i <= 24; i++) { ctx.beginPath(); ctx.moveTo(VW / 2 + (i * 60 - off - VW / 2) * 0.2, hz); ctx.lineTo(i * 60 - off, VH); ctx.stroke(); }
+    for (let j = 0; j < 8; j++) { const y = hz + Math.pow(j / 8, 1.8) * (VH - hz); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(VW, y); ctx.stroke(); }
+  }
+  if (amb === 'bubbles') {
+    // light shafts from the surface
+    for (let i = 0; i < 4; i++) {
+      const x = ((i * 260 - this.cam * 0.1 + Math.sin(this.time * 0.4 + i) * 30) % (VW + 200) + VW + 200) % (VW + 200) - 100;
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 70, 0); ctx.lineTo(x + 160, VH); ctx.lineTo(x + 60, VH); ctx.closePath(); ctx.fill();
+    }
+  }
+  // hills (thorny once menace kicks in)
+  this.hills(ctx, 0.15, 300, 60, pal.far, 0.004, m >= 1 ? Math.min(14, 4 + m * 2) : 0);
+  // eyes in the dark behind the near hills
+  for (const e of this.eyes) {
+    const x = ((e.x - this.cam * e.p) % 2400 + 2400) % 2400 - 200;
+    if (x < -20 || x > VW + 20) continue;
+    const open = Math.sin(this.time * 0.7 + e.ph) > -0.6 && (this.time + e.ph) % 5 > 0.15;
+    ctx.fillStyle = 'rgba(255,30,50,0.85)';
+    if (open) { ctx.beginPath(); ctx.ellipse(x, e.y, 3 * e.s, 2 * e.s, 0, 0, 7); ctx.ellipse(x + 10 * e.s, e.y, 3 * e.s, 2 * e.s, 0, 0, 7); ctx.fill(); }
+  }
+  this.hills(ctx, 0.35, 360, 50, pal.near, 0.007, m >= 1 ? Math.min(18, 6 + m * 2.5) : 0);
+  // lightning at high menace
+  if (m >= 4 || this.themeId === 'storm') {
+    this.boltT = (this.boltT === undefined ? 3 : this.boltT) - 1 / 60;
+    if (this.boltT <= 0) { this.boltT = Math.max(1.5, 9 - m) + Math.random() * 4; this.flash = 0.18; }
+    if (this.flash > 0) { this.flash -= 1 / 60; ctx.fillStyle = `rgba(255,240,255,${this.flash * 2})`; ctx.fillRect(0, 0, VW, VH); }
+  }
 };
+// Weather: screen-space particles that give each theme its feel.
+R.drawAmbient = function (ctx, dt) {
+  const m = this.menace || 0;
+  if (m >= 2) {
+    this.ash = this.ash || [];
+    this.ashAcc = (this.ashAcc || 0) + Math.min(3, (m - 1) * 0.35) * dt * 15;
+    while (this.ashAcc >= 1 && this.ash.length < 60) { this.ashAcc -= 1; this.ash.push({ x: Math.random() * VW, y: -5, vx: -20 + Math.random() * 10, vy: 30 + Math.random() * 30, s: 1 + Math.random() * 2, life: 14 }); }
+    ctx.fillStyle = m >= 5 ? 'rgba(255,90,90,0.5)' : 'rgba(170,160,160,0.5)';
+    this.ash = this.ash.filter(a => { a.life -= dt; a.x += (a.vx + Math.sin(this.time + a.y * 0.02) * 10) * dt; a.y += a.vy * dt; if (a.life <= 0 || a.y > VH + 5) return false; ctx.fillRect(a.x, a.y, a.s, a.s); return true; });
+  }
+  const kind = this.theme && this.theme.ambient;
+  if (!kind || kind === 'grid') return;
+  const rate = { dust: 0.5, embers: 1.2, sprinkles: 0.7, snow: 1.4, bubbles: 0.5, fog: 0.12, drip: 0.6, static: 2.5, rain: 4 }[kind] || 0;
+  this.ambAcc = (this.ambAcc || 0) + rate * dt * 60 * 0.25;
+  while (this.ambAcc >= 1 && this.amb.length < 90) {
+    this.ambAcc -= 1;
+    const x = Math.random() * VW; // screen space: weather does not scroll with the level
+    if (kind === 'snow') this.amb.push({ x, y: -6, vx: -10 + Math.random() * 20, vy: 30 + Math.random() * 40, s: 1.5 + Math.random() * 2.5, c: '#ffffff', life: 14 });
+    else if (kind === 'embers') this.amb.push({ x, y: VH + 6, vx: -15 + Math.random() * 30, vy: -(40 + Math.random() * 60), s: 1.5 + Math.random() * 2, c: Math.random() < 0.5 ? '#ffb020' : '#ff5a1f', life: 9 });
+    else if (kind === 'bubbles') this.amb.push({ x, y: VH + 6, vx: 0, vy: -(25 + Math.random() * 35), s: 2 + Math.random() * 4, c: 'ring', life: 16 });
+    else if (kind === 'sprinkles') this.amb.push({ x, y: -6, vx: -8 + Math.random() * 16, vy: 25 + Math.random() * 25, s: 3, c: ['#ff6fb0', '#8ed0ff', '#ffd84d', '#6fe8d0', '#c8b4ff'][Math.floor(Math.random() * 5)], rot: Math.random() * 3, life: 18 });
+    else if (kind === 'rain') this.amb.push({ x: x + 60, y: -10, vx: -120, vy: 620 + Math.random() * 160, s: 10, c: 'rain', life: 2 });
+    else if (kind === 'fog') this.amb.push({ x: -120, y: 260 + Math.random() * 200, vx: 15 + Math.random() * 20, vy: 0, s: 60 + Math.random() * 80, c: 'fog', life: 60 });
+    else if (kind === 'drip') this.amb.push({ x, y: -6, vx: 0, vy: 140 + Math.random() * 120, s: 2 + Math.random() * 1.5, c: '#a0101e', life: 6 });
+    else if (kind === 'static') this.amb.push({ x, y: Math.random() * VH, vx: 0, vy: 0, s: 1 + Math.random() * 1.5, c: Math.random() < 0.15 ? '#ff2a3a' : 'rgba(255,255,255,0.55)', life: 0.08 });
+    else if (kind === 'dust') this.amb.push({ x, y: 120 + Math.random() * 320, vx: 30 + Math.random() * 40, vy: -4 + Math.random() * 8, s: 1.5 + Math.random() * 1.5, c: 'rgba(255,230,190,0.6)', life: 6 });
+  }
+  const keep = [];
+  for (const q of this.amb) {
+    q.life -= dt; if (q.life <= 0 || q.y < -20 || q.y > VH + 20) continue;
+    q.x += (q.vx + (q.c === 'ring' || q.c === '#ffffff' ? Math.sin(this.time * 2 + q.y * 0.03) * 12 : 0)) * dt; q.y += q.vy * dt;
+    if (q.c === 'fog') { const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, q.s); g.addColorStop(0, 'rgba(200,220,210,0.16)'); g.addColorStop(1, 'rgba(200,220,210,0)'); ctx.fillStyle = g; ctx.fillRect(q.x - q.s, q.y - q.s, q.s * 2, q.s * 2); if (q.x > VW + 150) q.life = 0; keep.push(q); continue; }
+    if (q.c === 'rain') { ctx.strokeStyle = 'rgba(190,210,255,0.45)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - 2, q.y + q.s); ctx.stroke(); keep.push(q); continue; }
+    if (q.c === 'ring') { ctx.strokeStyle = 'rgba(220,250,255,0.55)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(q.x, q.y, q.s, 0, 7); ctx.stroke(); }
+    else if (q.rot !== undefined) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot + this.time); ctx.fillStyle = q.c; ctx.fillRect(-3, -1, 6, 2); ctx.restore(); }
+    else { ctx.fillStyle = q.c; ctx.beginPath(); ctx.arc(q.x, q.y, q.s, 0, 7); ctx.fill(); }
+    keep.push(q);
+  }
+  this.amb = keep;
+};
+
 R.cloud = function (ctx, x, y, s, col) {
   ctx.fillStyle = col; ctx.globalAlpha = 0.85;
   ctx.beginPath();
@@ -228,13 +421,15 @@ R.cloud = function (ctx, x, y, s, col) {
   ctx.arc(x + 48 * s, y, 20 * s, 0, Math.PI * 2); ctx.rect(x, y, 48 * s, 20 * s);
   ctx.fill(); ctx.globalAlpha = 1;
 };
-R.hills = function (ctx, par, base, amp, col, freq) {
+R.hills = function (ctx, par, base, amp, col, freq, thorns) {
   ctx.fillStyle = col;
   ctx.beginPath(); ctx.moveTo(0, VH);
   const off = this.cam * par + this.hillSeed * 100;
   for (let x = 0; x <= VW; x += 12) {
     const wx = x + off;
-    ctx.lineTo(x, base - Math.sin(wx * freq) * amp - Math.sin(wx * freq * 2.7 + 1.3) * amp * 0.35);
+    const y = base - Math.sin(wx * freq) * amp - Math.sin(wx * freq * 2.7 + 1.3) * amp * 0.35;
+    if (thorns) { const k = Math.floor(wx / 12); ctx.lineTo(x - 6, y); ctx.lineTo(x - 3, y - thorns * (0.5 + cellHash(k, 3) * 0.8)); }
+    ctx.lineTo(x, y);
   }
   ctx.lineTo(VW, VH); ctx.closePath(); ctx.fill();
 };
@@ -255,6 +450,7 @@ R.drawTiles = function (ctx, w, c0, c1) {
       const h1 = cellHash(c, r);
       if (h1 > 0.3) ctx.fillRect(x + 6 + h1 * 14, y + 12 + h1 * 10, 4, 4);
       if (h1 > 0.65) ctx.fillRect(x + 20 - h1 * 8, y + 22, 3, 3);
+      if ((this.menace || 0) >= 3 && h1 > 0.9 && r > 1) this.skull(ctx, x + 8 + (h1 - 0.9) * 120, y + 14);
       // side shading against open air
       ctx.fillStyle = pal.dirtD;
       if (!solidLook(c - 1, r) && c > 0) ctx.fillRect(x, y, 3, T);
@@ -264,7 +460,8 @@ R.drawTiles = function (ctx, w, c0, c1) {
         ctx.fillStyle = pal.grassD; ctx.fillRect(x, y, T, 11);
         ctx.fillStyle = pal.grass; ctx.fillRect(x, y, T, 8);
         ctx.beginPath();
-        for (let i = 0; i < 3; i++) ctx.arc(x + 5 + i * 11, y + 9, 5, 0, Math.PI);
+        if ((this.menace || 0) >= 2) { for (let i = 0; i < 4; i++) { ctx.moveTo(x + i * 8, y + 7); ctx.lineTo(x + 4 + i * 8, y + 13 + cellHash(c, i) * 3); ctx.lineTo(x + 8 + i * 8, y + 7); } }
+        else for (let i = 0; i < 3; i++) ctx.arc(x + 5 + i * 11, y + 9, 5, 0, Math.PI);
         ctx.fill();
         ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x, y + 1, T, 2);
       }
@@ -303,6 +500,12 @@ R.drawTiles = function (ctx, w, c0, c1) {
         for (let i = 0; i <= 24; i++) { const a = sp + i * 0.5, rr = i * 0.42; const px = x + T / 2 + Math.cos(a) * rr, py = y + 14 + Math.sin(a) * rr * 0.75; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
         ctx.stroke();
       }
+      if (k === TC.CRUMBLE) {
+        const left = w.crumbled.get(r * L.w + c);
+        ctx.strokeStyle = 'rgba(40,20,30,0.7)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x + 4, y + 12); ctx.lineTo(x + 12, y + 20); ctx.lineTo(x + 9, y + 30); ctx.moveTo(x + 22, y + 12); ctx.lineTo(x + 18, y + 24); ctx.stroke();
+        if (left !== undefined && left > 0) { ctx.fillStyle = `rgba(0,0,0,${0.4 - left})`; ctx.fillRect(x, y, T, T); }
+      }
       if (k === TC.CRACK) {
         ctx.strokeStyle = `rgba(50,25,40,${this.tell([0.9, 0.75, 0.6, 0.5, 0.42])})`; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(x + 8, y); ctx.lineTo(x + 13, y + 9); ctx.lineTo(x + 9, y + 16); ctx.lineTo(x + 15, y + 26);
@@ -333,6 +536,11 @@ R.drawTiles = function (ctx, w, c0, c1) {
       }
     }
   }
+};
+R.skull = function (ctx, x, y) {
+  ctx.fillStyle = 'rgba(235,225,210,0.75)';
+  ctx.beginPath(); ctx.arc(x, y, 4.5, Math.PI, 0); ctx.lineTo(x + 3.5, y + 4); ctx.lineTo(x - 3.5, y + 4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(30,10,15,0.8)'; ctx.fillRect(x - 3, y - 1, 2, 2); ctx.fillRect(x + 1, y - 1, 2, 2);
 };
 R.spikeRow = function (ctx, x, base, width, hgt, n, alpha) {
   if (hgt <= 0) return;
@@ -470,6 +678,26 @@ R.drawBoss = function (ctx, w) {
     ctx.restore();
   }
   if (glitchy && Math.random() < 0.05) this.glitch = Math.max(this.glitch, 0.08);
+};
+
+R.drawCrusher = function (ctx, cr, t) {
+  const y = SL.crusherY(cr, t), x = cr.x, w = cr.w;
+  ctx.fillStyle = '#4a4458'; ctx.fillRect(x + w / 2 - 4, cr.top, 8, y - cr.top);
+  ctx.fillStyle = '#5c5470'; SL.rrect(ctx, x, y, w, 28, 5); ctx.fill();
+  ctx.strokeStyle = '#1c1226'; ctx.lineWidth = 2.5; ctx.stroke();
+  // spikes underneath and an angry face
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + 2 + i * (w - 4) / 4, y + 28); ctx.lineTo(x + 2 + (i + 0.5) * (w - 4) / 4, y + 40); ctx.lineTo(x + 2 + (i + 1) * (w - 4) / 4, y + 28); ctx.fillStyle = '#eef2fb'; ctx.fill(); ctx.strokeStyle = '#6f7591'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  ctx.strokeStyle = '#ff4f6e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + 14, y + 8); ctx.lineTo(x + 26, y + 13); ctx.moveTo(x + w - 14, y + 8); ctx.lineTo(x + w - 26, y + 13); ctx.stroke();
+  ctx.fillStyle = '#ff4f6e'; ctx.fillRect(x + 18, y + 15, 4, 4); ctx.fillRect(x + w - 22, y + 15, 4, 4);
+};
+R.drawWave = function (ctx, wv, t) {
+  const up = SL.waveUp(wv, t);
+  for (let c = wv.c0; c < wv.c1; c++) {
+    const base = (wv.row + 1) * T, wig = up > 0 && up < 1 ? Math.sin(t * 60 + c) * 1.5 : 0;
+    ctx.fillStyle = 'rgba(40,20,40,0.6)';
+    for (let i = 0; i < 3; i++) ctx.fillRect(c * T + 6 + i * 9, base - 2, 4, 2);
+    if (up > 0) this.spikeRow(ctx, c * T + 2 + wig, base, T - 4, 20 * up, 2, 1);
+  }
 };
 
 R.drawTooth = function (ctx, th) {

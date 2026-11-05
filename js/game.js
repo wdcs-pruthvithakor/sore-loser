@@ -57,6 +57,7 @@ W.code = function (c, r) {
   if (r < 0 || r >= H) return TC.E;
   if (this.dropped && this.dropped.size) { const d = this.dropped.get(c); if (d !== undefined && r >= d) return TC.E; }
   const v = L.tiles[r * L.w + c];
+  if (v === TC.CRUMBLE && this.crumbled) { const k = this.crumbled.get(r * L.w + c); if (k !== undefined && k <= 0) return TC.E; }
   if (v === TC.INVIS) return this.shown && this.shown.has(r * L.w + c) ? TC.GROUND : TC.INVIS;
   return v;
 };
@@ -87,6 +88,7 @@ W.reset = function () {
   this.lunge = L.lungers.map(l => ({ x: l.c * T, y: l.row * T, moving: false, moved: 0, passed: false }));
   this.wall = { on: false, x: -1e9 };
   this.quakeT = 2.5;
+  this.crumbled = new Map(); // tile -> seconds left before it drops (<= 0: gone)
   this.bossState = L.boss ? { pressed: L.switches.map(() => false), toothT: 2, sawT: 3.5, saws: [], hurt: 0 } : null;
   this.attempt++;
   this.platMove(0);
@@ -405,6 +407,30 @@ W.hazards = function (dt) {
     bs.saws = bs.saws.filter(sw => sw.x > L.arena.x0 - 40 && sw.x < L.arena.x1 + 40);
   }
 
+  // Crumbling bridge (Rage): every tile you touch drops a moment later
+  if (p.grounded && !p.groundPlat) {
+    const r = Math.floor((p.y + PH + 2) / T);
+    for (let c = Math.floor(p.x / T); c <= Math.floor((p.x + PW - 1) / T); c++) {
+      const k = r * L.w + c;
+      if (L.tiles[k] === TC.CRUMBLE && !this.crumbled.has(k)) { this.crumbled.set(k, 0.32); this.emit('creak', { x: c * T + T / 2, y: r * T }); }
+    }
+  }
+  for (const [k, t] of this.crumbled) {
+    if (t > 0) { const nt = t - dt; this.crumbled.set(k, nt); if (nt <= 0) this.emit('tileFall', { x: (k % L.w) * T + T / 2, y: Math.floor(k / L.w) * T }); }
+  }
+
+  // Crushers (Hard): slam down fast, hold, then grind back up
+  for (const cr of L.crushers) {
+    const y = SL.crusherY(cr, this.t);
+    if (overlap(pr, { x: cr.x + 3, y: cr.top, w: cr.w - 6, h: y + 40 - cr.top })) return this.die('crusher');
+  }
+
+  // Rising spike floors (Rage): every spike in the strip pops up together, then sinks
+  for (const wv of L.waves) {
+    const up = SL.waveUp(wv, this.t);
+    if (up > 0.5 && p.x + PW > wv.c0 * T + 4 && p.x < wv.c1 * T - 4 && p.y + PH > (wv.row + 1) * T - 16 * up) return this.die('wave');
+  }
+
   // Spite Coins
   for (let i = 0; i < L.coins.length; i++) {
     if (this.coinsGot.has(i)) continue;
@@ -677,6 +703,24 @@ W.plantFlag = function () {
   this.respawnAt = { x: p.x, y: p.y }; this.cpReal = true;
   this.emit('plant', { x: p.x + PW / 2, y: p.y + PH });
   return true;
+};
+
+// A crusher's top edge over time: hold up, slam down in 0.12s, sit for 0.35s, rise over 0.7s.
+SL.crusherY = function (cr, t) {
+  const travel = cr.floor - 40 - cr.top, u = ((t + cr.phase) % cr.period + cr.period) % cr.period;
+  const rest = cr.period - 1.17;
+  if (u < rest) return cr.top;
+  const k = u - rest;
+  if (k < 0.12) return cr.top + travel * (k / 0.12);
+  if (k < 0.47) return cr.top + travel;
+  return cr.top + travel * (1 - (k - 0.47) / 0.7);
+};
+// How far the rising spikes are up, 0..1.
+SL.waveUp = function (wv, t) {
+  const per = wv.up + wv.down, u = ((t + wv.phase) % per + per) % per;
+  if (u < wv.down - 0.25) return 0;
+  if (u < wv.down) return (u - (wv.down - 0.25)) / 0.25 * 0.3; // a little warning wiggle
+  return 1;
 };
 
 SL.sawPos = function (sw, t) {

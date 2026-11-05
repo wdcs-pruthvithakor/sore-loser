@@ -8,10 +8,10 @@ const T = 32, H = 15;
 SL.TILE = T; SL.ROWS = H; SL.VIEW_W = 864; SL.VIEW_H = H * T;
 
 // Tile codes.
-const E = 0, GROUND = 1, SPIKE = 2, FALSE = 3, BRIDGE = 4, HOLE = 5, CRACK = 6, PAPER = 7, SEAM = 8, SWIRL = 9, SPIKED = 10, INVIS = 11;
-SL.TC = { E, GROUND, SPIKE, FALSE, BRIDGE, HOLE, CRACK, PAPER, SEAM, SWIRL, SPIKED, INVIS };
-SL.isSolid = c => c === GROUND || c === BRIDGE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL;
-SL.looksSolid = c => c === GROUND || c === FALSE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL;
+const E = 0, GROUND = 1, SPIKE = 2, FALSE = 3, BRIDGE = 4, HOLE = 5, CRACK = 6, PAPER = 7, SEAM = 8, SWIRL = 9, SPIKED = 10, INVIS = 11, CRUMBLE = 12;
+SL.TC = { E, GROUND, SPIKE, FALSE, BRIDGE, HOLE, CRACK, PAPER, SEAM, SWIRL, SPIKED, INVIS, CRUMBLE };
+SL.isSolid = c => c === GROUND || c === BRIDGE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL || c === CRUMBLE;
+SL.looksSolid = c => c === GROUND || c === FALSE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL || c === CRUMBLE;
 
 // ---------- RNG ----------
 function hashStr(s) {
@@ -212,7 +212,7 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   const g = new Uint8Array(MAXW * H);
   const L = {
     level, seed, diff, tier: SL.tierOf(level), gt: tier, cheats: cheats.slice(), plats: [], signs: [], forks: [], saws: [], mimics: [],
-    tunnels: [], lungers: [], invis: [], coins: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null,
+    tunnels: [], lungers: [], invis: [], coins: [], crushers: [], waves: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null,
     ng, remix: SL.remixFor(ng)
   };
   const get = (c, row) => (c >= 0 && c < MAXW && row >= 0 && row < H) ? g[row * MAXW + c] : E;
@@ -333,6 +333,49 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
       pit(n);
       flat(2);
     }
+  };
+
+  // ----- mode-only segments: Hard (and Normal NG+1) gets crushers and saw gauntlets,
+  // Rage (and NG+2) also gets rising spike floors and crumbling bridges -----
+  const evil = SL.DIFFS[diff].bump + ng;
+  const segCrusher = () => {
+    flat(2);
+    const n = r.int(2, 3), x0 = x;
+    flat(n * 3 + 1);
+    for (let c = x0 - 1; c <= x0 + n * 3 + 1; c++) for (let row = Math.max(0, h - 7); row <= h - 5; row++) set(c, row, GROUND);
+    for (let i = 0; i < n; i++) {
+      L.crushers.push({ x: (x0 + 1 + i * 3) * T, w: 2 * T, top: (h - 4) * T, floor: h * T, period: [2.4, 2.2, 2, 1.8, 1.7][tier], phase: i * 0.55 + r() * 0.2 });
+    }
+    for (let c = x0 - 1; c <= x0 + n * 3 + 1; c++) protect.add(c);
+    flat(2);
+  };
+  const segGauntlet = () => {
+    flat(1);
+    const n = r.int(9, 11), x0 = x;
+    flat(n);
+    const k = tier >= 3 ? 3 : 2, seg = (n - 1) / k;
+    for (let i = 0; i < k; i++) {
+      const a = (x0 + 0.5 + i * seg) * T, b = (x0 + 0.5 + (i + 1) * seg) * T;
+      L.saws.push({ x0: a, y0: h * T - 13, x1: b, y1: h * T - 13, omega: sawSpeed * Math.PI * 2 / 1.5, phase: i * Math.PI * 0.7 });
+    }
+    for (let c = x0; c < x0 + n; c++) protect.add(c);
+    flat(1);
+  };
+  const segWaves = () => {
+    flat(2);
+    const n = r.int(6, 7), x0 = x; // short enough to sprint across in one down phase
+    flat(n);
+    L.waves.push({ c0: x0, c1: x0 + n, row: h - 1, up: tier >= 4 ? 0.55 : 0.5, down: 1.2, phase: r() * 1.6 });
+    for (let c = x0 - 1; c <= x0 + n; c++) protect.add(c);
+    flat(2);
+  };
+  const segCrumble = () => {
+    flat(2);
+    const n = r.int(8, 11);
+    for (let i = 0; i < n; i++) { set(x + i, h, CRUMBLE); set(x + i, H - 1, SPIKE); }
+    for (let c = x; c < x + n; c++) protect.add(c);
+    x += n;
+    flat(2);
   };
 
   // ----- cheat segments -----
@@ -513,6 +556,8 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   const fillers = level === 1 ? [segGap, segStep, segSpikes, segPillars, segCeil, segSaw] :
     tier === 0 ? [segGap, segStep, segSpikes, segPlats, segPillars, segCeil, segSaw, segStairs] :
     [segGap, segSpikes, segPlats, segPillars, segMover, segCeil, segSaw, segSaw, segStairs, segCorridor];
+  if (level > 1 && evil >= 1) fillers.push(segCrusher, segGauntlet);
+  if (level > 1 && evil >= 2) fillers.push(segWaves, segCrumble, segCrusher);
   // never the same filler twice in a row
   let lastFill = null;
   const filler = () => { let f; do { f = r.pick(fillers); } while (f === lastFill && fillers.length > 1); lastFill = f; f(); };

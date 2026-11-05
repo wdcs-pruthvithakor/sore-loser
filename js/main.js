@@ -192,7 +192,7 @@ function refreshCounts() {
     const lv = levelIn(b.dataset.d);
     b.innerHTML = `${SL.DIFFS[b.dataset.d].name}<small>${lv > 1 ? 'Lv ' + lv : 'new'}</small>`;
   }
-  $('t-diff-blurb').textContent = SL.DIFFS[save.diff].blurb;
+  $('t-diff-blurb').textContent = SL.DIFFS[save.diff].blurb + ' World: ' + SL.themeName(save.diff, save.ng) + '.';
   const snd = save.sound ? 'Sound on' : 'Sound off';
   for (const id of ['t-sound', 'p-sound']) { $(id).textContent = snd; $(id).setAttribute('aria-pressed', String(save.sound)); }
 }
@@ -533,7 +533,8 @@ function showEnding(pay) {
   $('e-text').innerHTML = SL.VOICE.ending.map(t => `<p>${t}</p>`).join('');
   $('e-stats').innerHTML = [['Deaths, all time', save.totalDeaths], ['Levels cleared', save.cleared], ['Loser Rank', SL.rankOf(save.xp).lvl], ['Paid for this', '+' + pay.total]].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   $('e-ng').textContent = `Start New Game+${ng + 1}`;
-  $('e-ng-sub').textContent = ng + 1 <= 2 ? 'Harder levels, +1 cheat everywhere, bigger pay, and I rewrite some of my own rules.' : 'Harder again. Bigger pay again. I am running out of ideas but not out of spite.';
+  const nextWorld = SL.themeName(world.L.diff, ng + 1);
+  $('e-ng-sub').textContent = `New world: ${nextWorld}. ` + (ng + 1 <= 2 ? 'Harder levels, +1 cheat everywhere, bigger pay, and I rewrite some of my own rules.' : 'Harder again. Bigger pay again. I am running out of ideas but not out of spite.');
   mode = 'clear';
   show('hud', false); show('touch', false); show('s-end', true);
   SL.Audio.play('crack');

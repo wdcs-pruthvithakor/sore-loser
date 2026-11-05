@@ -28,6 +28,15 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
   Backwards Flag, Copycat, Spike Wall. Rules are in `SL.CHEATS`.
 - **Difficulty modes** (`SL.DIFFS`, one separate run per mode; switching never loses progress): Normal (tells fade as levels rise), Hard (faint tells, +1 cheat, layouts one
   tier meaner), Rage (no tells at all, +2 cheats, layouts two tiers meaner, signs drop their punctuation).
+- **Worlds** (`SL.THEMES` in `js/render.js`): fifteen worlds, five per mode and never shared.
+  Normal: Meadow, Candy Land, Frostbite Peaks, The Deep, Synthwave. Hard: Sunburnt Canyon, Rotmire Swamp,
+  Dead Hollow, The Rust Works, Stormbreak Cliffs. Rage: The Inferno, The Void, The Hive, Blood Cathedral,
+  The Ossuary. One step per New Game+; after five the route loops as twisted versions (shifted colours,
+  "Corrupted / Fallen / Shattered..." names). On top sits **menace** (`SL.menaceFor`): Normal 0, Hard 2,
+  Rage 4, +1.5 per New Game+, no cap: thorny hills, spiky grass, blood moon, ash, skulls, eyes in the dark,
+  red vignette, lightning and glitches as it rises.
+- **Mode-only obstacles**: Hard (and Normal NG+1) adds crushers and saw gauntlets; Rage (and NG+2) adds rising
+  spike floors and crumbling bridges. Each mode's run also has its own seed, so no layout repeats across modes.
 - **Twists** (`SL.TWISTS`): from level 6 a level may get ice, lights out, low gravity, fast forward, earthquake or
   (late) a mirrored screen.
 - **Hazards**: spike-bed pits, sawblades, hanging-spike ceilings and corridors that need a short hop, single-block
