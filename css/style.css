@@ -424,7 +424,7 @@ body.touchy .toasts { bottom: auto; top: 44px; }
 .item canvas, .item .fx-ico { width: 72px; height: 72px; border-radius: 12px; background: linear-gradient(180deg, #bfe7ff, #fff1f7); }
 .item .fx-ico { display: grid; place-items: center; font-size: 26px; font-weight: 700; color: var(--ink); }
 .item b { font-size: 15px; font-weight: 600; text-align: center; }
-.item .tag { font-size: 12px; color: var(--ink-2); text-align: center; line-height: 1.2; }
+.item .tag { margin: 0; text-shadow: none; font-weight: 400; font-size: 12px; color: var(--ink-2); text-align: center; line-height: 1.2; }
 .item .tag i { font-style: normal; font-family: var(--mono); background: #fff4c2; border: 1.5px solid var(--ink); border-radius: 8px; padding: 1px 7px; color: var(--ink); }
 .item.own .tag { color: #2f8a55; font-weight: 600; }
 .item.on { background: #eafff1; border-color: #2f8a55; box-shadow: 0 3px 0 #2f8a55; }

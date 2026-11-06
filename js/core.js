@@ -720,7 +720,7 @@ function buildBoss(runSeed, diff, ng) {
   for (const [c, top] of [[13, 9], [14, 9], [24, 8], [25, 8], [35, 9], [36, 9]]) col(c, top);
   const L = {
     level: 100, seed: hashStr(runSeed + ':boss'), diff, tier: 4, gt: 4, cheats: [], plats: [], signs: [], forks: [], saws: [], mimics: [], tunnels: [],
-    lungers: [], invis: [], coins: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [{ x: (W - 4) * T, y: 11 * T }], hops: 0,
+    lungers: [], invis: [], coins: [], crushers: [], waves: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [{ x: (W - 4) * T, y: 11 * T }], hops: 0,
     start: { x: 2.5 * T, y: 11 * T }, twist: null, ng, remix: SL.remixFor(ng), w: W, salt: 0,
     boss: { x: 24.5 * T, y: 2.6 * T }, arena: { x0: 9 * T, x1: (W - 3) * T, floor: 11 * T },
     switches: [{ x: 14 * T, y: 9 * T }, { x: 25 * T, y: 8 * T }, { x: 36 * T, y: 9 * T }]

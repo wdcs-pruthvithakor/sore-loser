@@ -1374,7 +1374,7 @@ function frame(now) {
 }
 
 // ---------- boot ----------
-SL.debug = { get world() { return world; }, input, get save() { return save; }, startLevel, say };
+SL.debug = { get world() { return world; }, input, get save() { return save; }, startLevel, say, switchDiff, refreshCounts, setupAttract, openOverlay, closeOverlay, pause, persist, openShareCard };
 // Caught editing the save: the Game reacts on the title screen.
 let sceneUntil = 0;
 function caughtScene() {
