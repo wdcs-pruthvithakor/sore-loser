@@ -92,6 +92,15 @@ node tools/check.js [levels]
 
 Builds hundreds of levels across seeds and tiers, validates routes and runs a random bot through each.
 
+```
+node tools/solve.js quick|full        # sweep: every trick under every twist in every mode, plus real mixes
+node tools/solve.js quick headache    # only jobs whose description contains "headache"
+node tools/solve.js retry|fine        # rerun tools/solve-fails.json (fine = 0.05s timing)
+node tools/solve.js one '{"seed":"4GZA7","level":55,"cheats":[],"diff":"normal","twist":"floaty"}'
+```
+
+Plays levels through the real physics with a beam search over human-sized inputs (a short hop is a 0.1s tap) and reports any level no route can finish, with a map of where it got stuck. Catches combination bugs the route validator cannot see. The quick sweep takes about two hours on 12 cores.
+
 ## Credits
 
 Fonts: Fredoka and DM Mono, SIL Open Font License (`fonts/OFL-*.txt`).

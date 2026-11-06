@@ -402,7 +402,8 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   const segGotcha = () => {
     flat(3);
     set(x - 1, h, CRACK);
-    const n = r.int(2, Math.min(4, maxGap));
+    // the way across is to jump from the tile before the crack, so the gap is one shorter than it looks
+    const n = r.int(2, Math.min(3, maxGap));
     L.gotchas.push({ x0: x, x1: x + n, row: h });
     pit(n);
     if (r.chance(0.4)) h = clampH(h + 1);
@@ -581,6 +582,7 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   const falseP = has('falseFloor') ? [0.04, 0.07, 0.1, 0.13, 0.16][tier] : 0;
   const invisP = has('invisBlock') ? [0.35, 0.45, 0.55, 0.65, 0.75][tier] : 0;
   const lungeP = has('lunger') ? [0.3, 0.4, 0.5, 0.6, 0.7][tier] : 0;
+  const spikedOver = (c0, c1, row) => { for (let c = c0; c <= c1; c++) for (let rr = Math.max(0, row - 7); rr < row; rr++) if (get(c, rr) === SPIKED) return true; return false; };
   for (let c = bodyStart + 1; c < bodyEnd - 1; c++) {
     if (protect.has(c) || protect.has(c - 1) || protect.has(c + 1)) continue;
     for (let row = 4; row < H - 1; row++) {
@@ -594,7 +596,9 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
       if (lft && rgt && holeP && r.chance(holeP)) set(c, row, HOLE);
       else if (lft && rgt && falseP && get(c, row + 1) === GROUND && r.chance(falseP)) falseCol(c, row);
       else if (edge && invisP && gw >= 2 && gw <= (tier >= 2 ? 3 : 2) && clearAbove && r.chance(invisP)) { set(c + 1, row - 4, INVIS); L.invis.push({ c: c + 1, row: row - 4, gap: gw, edge: c }); protect.add(c); }
-      else if (edge && crackP && r.chance(crackP)) set(c, row, CRACK);
+      // a crack forces the jump to start a tile early: only on gaps that still leave room for that,
+      // and never under a spike ceiling, where only a short hop from the very edge fits
+      else if (edge && crackP && gw <= 3 && !spikedOver(c - 1, c + gw + 1, row) && r.chance(crackP)) set(c, row, CRACK);
       break;
     }
   }

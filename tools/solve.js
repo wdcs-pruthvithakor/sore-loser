@@ -40,52 +40,57 @@ function restore(ctx, w, s0) {
   ctx.__r = s.r;
 }
 
-const STEP = 12, DT = 1 / 120; // 0.1s per decision
+const DT = 1 / 120;
 const ACTS = [];
 for (const dir of [1, 0, -1]) for (const j of [0, 1, 2]) ACTS.push({ dir, j }); // j: 0 release, 1 press, 2 keep holding
 
 function solve(ctx, L, opts) {
   const SL = ctx.SL, T = SL.TILE;
   const w = new SL.World(L, { bonks: 0, crumbleSurvive: 0, causes: {} });
-  const PER_COL = opts.perCol || 6, CAP = opts.cap || 360;
-  let beam = [{ s: snap(ctx, w), held: false, x: w.p.x }];
-  const maxDepth = Math.ceil((L.w * T / 200 + 25) / 0.1);
+  for (const id of opts.off || []) delete w.has[id]; // debugging: same layout, one cheat switched off
+  const PER_COL = opts.perCol || 4, CAP = opts.cap || 600;
+  // fine mode decides every 0.05s for tighter timing, but a tap is still held at least 0.1s
+  const STEP = opts.fine ? 6 : 12, MINHOLD = opts.fine ? 2 : 1;
+  let beam = [{ s: snap(ctx, w), held: 0, x: w.p.x }];
+  const maxDepth = Math.ceil((L.w * T / 200 + 25) / (STEP * DT));
   let best = w.p.x, deathCauses = {};
   for (let depth = 0; depth < maxDepth; depth++) {
     const seen = new Set(), kids = [];
     for (const node of beam) {
       for (const a of ACTS) {
         if (a.j === 2 && !node.held) continue;
+        if (node.held && node.held < MINHOLD && a.j !== 2) continue;
         restore(ctx, w, node.s);
         let dead = false;
         for (let f = 0; f < STEP; f++) {
           const inp = { left: a.dir < 0, right: a.dir > 0, jump: a.j > 0, jumpPressed: a.j === 1 && f === 0, down: false };
           w.update(DT, inp);
-          if (w.won) return { ok: true, depth, t: depth * 0.1 };
+          if (w.won) return { ok: true, depth, t: depth * STEP * DT };
           if (!w.p.alive) { dead = true; const c = w.events.find(e => e.type === 'death'); if (c) deathCauses[c.cause] = (deathCauses[c.cause] || 0) + 1; break; }
         }
         w.events.length = 0;
         if (dead) continue;
         const p = w.p;
-        const key = [Math.floor(p.x / 4), Math.floor(p.y / 4), Math.round(p.vx / 40), Math.round(p.vy / 80), a.j > 0 ? 1 : 0,
+        const key = [Math.floor(p.x / 4), Math.floor(p.y / 4), Math.round(p.vx / 40), Math.round(p.vy / 80), a.j === 1 ? 1 : a.j === 2 ? Math.min(node.held + 1, MINHOLD + 1) : 0,
           w.swapped ? 1 : 0, w.dropped.size, w.door.spot, w.cpReal ? 1 : 0, w.shown.size].join(',');
         if (seen.has(key)) continue;
         seen.add(key);
-        kids.push({ s: snap(ctx, w), held: a.j > 0, x: p.x, g: p.grounded });
+        kids.push({ s: snap(ctx, w), held: a.j === 1 ? 1 : a.j === 2 ? node.held + 1 : 0, x: p.x, y: p.y, vx: p.vx, g: p.grounded });
       }
     }
     if (!kids.length) return { ok: false, best, deathCauses, depth };
     // keep a spread: a few states per column, nearest the frontier first
+    // grouped by column and height band, so a climb is not crowded out by the floor below it
     const cols = new Map();
-    for (const k of kids) { const c = Math.floor(k.x / T); if (!cols.has(c)) cols.set(c, []); cols.get(c).push(k); }
+    for (const k of kids) { const c = Math.floor(k.x / T) * 100 + Math.floor(k.y / T); if (!cols.has(c)) cols.set(c, []); cols.get(c).push(k); }
     const order = [...cols.keys()].sort((a, b) => b - a);
-    const front = order[0];
+    const front = Math.floor(order[0] / 100);
     beam = [];
     for (const c of order) {
-      if (c < front - 16 || beam.length >= CAP) break;
+      if (Math.floor(c / 100) < front - 16 || beam.length >= CAP) break;
       const list = cols.get(c);
-      // grounded states first (they can wait), then the rest, spread across the list
-      list.sort((a, b) => (b.g ? 1 : 0) - (a.g ? 1 : 0));
+      // spread across speeds, fastest first: on ice a slow state cannot get its speed back in time
+      list.sort((a, b) => b.vx - a.vx);
       const stride = Math.max(1, Math.floor(list.length / PER_COL));
       for (let i = 0, n = 0; i < list.length && n < PER_COL; i += stride, n++) beam.push(list[i]);
     }
@@ -118,6 +123,8 @@ if (!isMainThread) {
     } catch (e) { res = { ok: false, err: e.message }; }
     parentPort.postMessage({ job, res, ms: Date.now() - t0, w: L && L.w, twist: L && L.twist });
   });
+} else if (require.main !== module) {
+  module.exports = { loadSL, snap, restore, solve };
 } else {
   const ctx = loadSL(), SL = ctx.SL;
   const mode = process.argv[2] || 'quick';
@@ -126,6 +133,8 @@ if (!isMainThread) {
   const diffs = ['normal', 'hard', 'rage'];
   if (mode === 'one') {
     jobs.push(JSON.parse(process.argv[3]));
+  } else if (mode === 'retry' || mode === 'fine') {
+    jobs.push(...JSON.parse(fs.readFileSync(path.join(__dirname, 'solve-fails.json'), 'utf8')).map(j => mode === 'fine' ? Object.assign(j, { opts: Object.assign({}, j.opts, { fine: true }) }) : j));
   } else {
     const levels = mode === 'full' ? [8, 25, 45, 70, 95] : [12, 55];
     // every cheat alone, under every physics twist, in every mode
@@ -142,7 +151,7 @@ if (!isMainThread) {
       }
     }
   }
-  const filt = mode !== 'one' && process.argv[3];
+  const filt = ['quick', 'full'].includes(mode) && process.argv[3];
   const todo = filt ? jobs.filter(j => JSON.stringify(j).includes(filt)) : jobs;
   console.log(`${todo.length} levels to solve`);
   const N = Math.min(11, todo.length), fails = [];
