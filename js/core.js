@@ -286,6 +286,9 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     for (let i = 0; i < n; i++) { pit(r.int(1, Math.min(4, maxGap - 1))); h = clampH(h + r.int(-1, 1)); coin((x + 0.5) * T, (h - 1.6) * T, 0.18); flat(tier >= 2 ? 1 : r.int(1, 2)); }
     pit(r.int(1, 2)); h = clampH(h + r.int(-1, 1)); flat(2);
   };
+  // Floaty gravity makes even a quick tap rise ~90px, the exact clearance under a normal slab,
+  // so hang spike ceilings one tile higher there. A full jump still hits them.
+  const ceilLift = () => L.twist === 'floaty' ? 1 : 0;
   // A slab of hanging spikes over a gap: only a short hop gets under it.
   let ceilTaught = (SL.tierOf(level) > 0 || diff !== 'normal') ? 9 : 0;
   const segCeil = () => {
@@ -293,7 +296,7 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     if (ceilTaught < 1) { ceilTaught++; sign(x - 2, 'tap jump and let go fast for a tiny hop...'); }
     const n = r.int(2, tier >= 1 ? 3 : 2);
     const a = x - 1, b = x + n;
-    for (let c = a; c <= b; c++) { for (let row = Math.max(0, h - 7); row <= h - 5; row++) set(c, row, GROUND); set(c, h - 4, SPIKED); }
+    const up = ceilLift(); for (let c = a; c <= b; c++) { for (let row = Math.max(0, h - 7 - up); row <= h - 5 - up; row++) set(c, row, GROUND); set(c, h - 4 - up, SPIKED); }
     coin((x + n / 2) * T, (h - 1.9) * T, 0.7);
     pit(n);
     flat(2);
@@ -304,7 +307,7 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     const n = r.int(5, 7);
     const x0 = x;
     flat(n);
-    for (let i = -1; i <= n; i++) { for (let row = Math.max(0, h - 7); row <= h - 5; row++) set(x0 + i, row, GROUND); set(x0 + i, h - 4, SPIKED); }
+    const up = ceilLift(); for (let i = -1; i <= n; i++) { for (let row = Math.max(0, h - 7 - up); row <= h - 5 - up; row++) set(x0 + i, row, GROUND); set(x0 + i, h - 4 - up, SPIKED); }
     let p = r.int(1, 2);
     while (p < n - 1) { set(x0 + p, h - 1, SPIKE); p += r.int(3, 4); }
     for (let c = x0 - 1; c <= x0 + n; c++) protect.add(c);
@@ -533,6 +536,7 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     const p = rage ? 0.7 : [0, 0.4, 0.55, 0.65, 0.75][SL.tierOf(level)];
     if (r.chance(p)) L.twist = r.pick(pool);
   }
+  if (opts.twist !== undefined) L.twist = opts.twist; // test harness only
 
   // ----- body -----
   // Short and dense: more cheats means fewer filler segments, not a longer level.
