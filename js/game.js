@@ -13,6 +13,8 @@ const P = {
 };
 SL.PHYS = P;
 
+// The boss's dice: a seed kept in its state (so the fight can be saved and replayed), not a closure.
+const roll = bs => { let t = (bs.rs = (bs.rs + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
 function World(L, history) {
@@ -44,6 +46,13 @@ function World(L, history) {
   this.attempt = 0;
   this.idleRun = 0;
   for (const p of L.plats) { p.baseX = p.x; p.homeY = p.y; }
+  this.cps = L.checkpoints.map(() => ({ real: false, fake: false }));
+  this.inBuf = []; this.lagNow = false; this.lagJump = false;
+  // The boss keeps its health between your deaths; your lives only exist once the fight starts.
+  if (L.boss) {
+    const b = L.boss, maxHp = b.phases * b.perPhase;
+    this.bossState = { maxHp, hp: maxHp, phase: 1, lives: SL.BOSS_LIVES, livesLost: 0, wipe: false, seen: false, lastSpot: -1, rs: (L.seed ^ 0xb055) >>> 0 };
+  } else this.bossState = null;
   this.p = { x: 0, y: 0, vx: 0, vy: 0, face: 1, grounded: false, coy: 0, buf: 0, alive: true, deadT: 0, sq: 1, trapT: 0, bonkT: 0, fallPlatT: 0 };
   this.reset();
 }
@@ -73,6 +82,8 @@ W.reset = function () {
   });
   for (const pl of L.plats) { pl.shake = 0; pl.fallen = false; pl.fy = 0; pl.fvy = 0; pl.dx = 0; pl.y = pl.homeY; pl.x = pl.baseX; pl.dodged = false; pl.dodgeT = -1; }
   this.door = { spot: 0, x: L.doorSpots[0].x, y: L.doorSpots[0].y, hopsLeft: L.hops, hop: null, scared: 0 };
+  this.peek = { on: false, x: 0, y: 0, frozen: false, close: false };
+  this.inBuf.length = 0; this.lagNow = false;
   this.popped = new Map();
   this.bonks = [];
   this.landCount = 0;
@@ -90,7 +101,11 @@ W.reset = function () {
   this.quakeT = 2.5;
   this.crumbled = new Map(); // tile -> seconds left before it drops (<= 0: gone)
   this.spawnSafe = 0.8; // a beat after respawning where moving hazards cannot get you
-  this.bossState = L.boss ? { pressed: L.switches.map(() => false), toothT: 2, sawT: 3.5, saws: [], hurt: 0 } : null;
+  const bs = this.bossState;
+  if (bs) {
+    if (bs.wipe) { bs.hp = bs.maxHp; bs.phase = 1; bs.lives = SL.BOSS_LIVES; bs.wipe = false; this.emit('bossReset'); }
+    Object.assign(bs, { started: false, plug: null, plugT: 0, toothT: 2, sawT: 3.5, fistT: 2.5, darkT: 4, dark: 0, calm: 0, hurt: 0, saws: [], fists: [] });
+  }
   this.attempt++;
   this.platMove(0);
 };
@@ -120,7 +135,9 @@ W.platMove = function (dt) {
 W.die = function (cause) {
   const p = this.p;
   if (!p.alive || this.won || this.invuln > 0) return;
-  if (this.spawnSafe > 0 && ['spikeWall', 'crusher', 'saw', 'wave', 'boss', 'copycat', 'lunger', 'ceilingTeeth'].indexOf(cause) >= 0) return;
+  if (this.spawnSafe > 0 && ['spikeWall', 'crusher', 'saw', 'wave', 'boss', 'copycat', 'lunger', 'ceilingTeeth', 'laser', 'blade', 'peekaboo', 'bossSaw', 'bossFist', 'bossTooth'].indexOf(cause) >= 0) return;
+  // inside the static, a fall or a spike is the lag's fault
+  if (this.lagNow && (cause === 'pit' || cause === 'spike' || cause === 'ceilSpike')) cause = 'lagZone';
   // Bubble consumable: pops instead of you, and puts you back on the last safe ground
   if (this.shield > 0) {
     this.shield--; this.invuln = 1.2;
@@ -130,6 +147,12 @@ W.die = function (cause) {
     return;
   }
   p.alive = false; p.deadT = 0.45;
+  const bs = this.bossState;
+  if (bs && bs.started) {
+    bs.lives--; bs.livesLost++;
+    if (bs.lives <= 0) bs.wipe = true;
+    this.emit('bossLife', { lives: Math.max(0, bs.lives), wipe: bs.wipe });
+  }
   if (this.greedy && this.coinsGot.size) { this.coinsGot = new Set(); this.emit('coinsLost'); }
   if (this.has[cause]) this.markSeen(cause);
   this.stats.deaths++;
@@ -172,6 +195,15 @@ W.update = function (dt, input) {
   if (this.invuln > 0) this.invuln -= dt;
   if (this.spawnSafe > 0) this.spawnSafe -= dt;
 
+  // ----- Lag Spike: inside the static, every key arrives a quarter-second late -----
+  if (this.has.lagZone) {
+    this.inBuf.push({ left: input.left, right: input.right, jump: input.jump, jumpPressed: input.jumpPressed, down: input.down });
+    if (this.inBuf.length > 40) this.inBuf.shift();
+    const pcx = p.x + SL.PW / 2;
+    this.lagNow = L.lags.some(z => pcx >= z.x0 && pcx < z.x1);
+    if (this.lagNow) input = this.inBuf.length > 30 ? this.inBuf[this.inBuf.length - 31] : { left: false, right: false, jump: false, jumpPressed: false };
+  }
+
   // ----- horizontal (Wrong Way swaps the keys) -----
   let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (this.swapped) dir = -dir;
@@ -193,7 +225,7 @@ W.update = function (dt, input) {
   if (p.grounded) p.coy = P.coyote; else p.coy -= dt;
   if (p.buf > 0 && p.coy > 0) {
     p.vy = -P.jumpV; p.buf = 0; p.coy = 0; p.grounded = false;
-    p.sq = 1.25; p.takeoffX = p.x + PW / 2;
+    p.sq = 1.25; p.takeoffX = p.x + PW / 2; this.lagJump = this.lagNow;
     this.stats.jumps++;
     this.emit('jump', { x: p.x + PW / 2, y: p.y + PH });
     if (p.groundCode === TC.CRACK && this.has.headache) this.spawnBonk();
@@ -217,17 +249,19 @@ W.update = function (dt, input) {
   const grav = p.vy < 0 ? (input.jump ? P.grav : P.gravRelease) : P.gravFall;
   p.vy = Math.min(P.maxFall, p.vy + grav * dt);
 
-  // ride moving platforms
+  // ride moving platforms, and conveyor belts
   if (p.groundPlat && !p.groundPlat.fallen) p.x += p.groundPlat.dx;
+  const carry = p.grounded && !p.groundPlat && (p.groundCode === TC.BELT_L || p.groundCode === TC.BELT_R) ? (p.groundCode === TC.BELT_R ? 1 : -1) * SL.BELT_SPEED * dt : 0;
+  p.x += carry;
 
   // ----- move X -----
   p.x += p.vx * dt;
   const r0 = Math.floor(p.y / T), r1 = Math.floor((p.y + PH - 0.001) / T);
-  if (p.vx > 0 || (p.groundPlat && p.groundPlat.dx > 0)) {
+  if (p.vx > 0 || carry > 0 || (p.groundPlat && p.groundPlat.dx > 0)) {
     const c = Math.floor((p.x + PW - 0.001) / T);
     for (let r = r0; r <= r1; r++) if (this.solid(c, r)) { p.x = c * T - PW; p.vx = Math.min(0, p.vx); break; }
   }
-  if (p.vx < 0 || (p.groundPlat && p.groundPlat.dx < 0)) {
+  if (p.vx < 0 || carry < 0 || (p.groundPlat && p.groundPlat.dx < 0)) {
     const c = Math.floor(p.x / T);
     for (let r = r0; r <= r1; r++) if (this.solid(c, r)) { p.x = (c + 1) * T; p.vx = Math.max(0, p.vx); break; }
   }
@@ -284,6 +318,8 @@ W.update = function (dt, input) {
         if (p.takeoffX < gq.x0 * T && p.x + PW / 2 >= gq.x1 * T && p.x + PW / 2 < gq.x1 * T + 3 * T && (this.history.bonks || 0) > 0) this.discover('headache');
       }
     }
+    // Lag Spike: a real jump made from inside the static, after the lag has got you once
+    if (p.takeoffX !== null && this.lagJump && this.has.lagZone && Math.abs(p.x + PW / 2 - p.takeoffX) > 2.5 * T && this.history.causes && this.history.causes.lagZone) this.discover('lagZone');
     // Invisible Block: clearing a gap whose block you did not touch, after one got you
     if (p.takeoffX !== null && this.history.reveals > 0) {
       for (const iv of L.invis) {
@@ -379,35 +415,65 @@ W.hazards = function (dt) {
     }
   }
 
-  // The boss attacks: teeth dropped where you are heading, and saws swept across the floor
-  if (L.boss && p.x > L.arena.x0) {
-    const bs = this.bossState, n = bs.pressed.filter(v => v).length, rage = this.rage ? 0.8 : 1;
+  // The boss: each phase adds an attack. 1 teeth and saws, 2 fists, 3 the floor (see waves), 4 blackouts.
+  const bs = this.bossState;
+  if (bs && bs.started && bs.hp > 0) {
+    const B = L.boss, ph = bs.phase, rate = (this.rage ? 0.82 : 1) / B.speed;
     if (bs.hurt > 0) bs.hurt -= dt;
-    bs.toothT -= dt;
-    if (bs.toothT <= 0) {
-      bs.toothT = [1.2, 0.95, 0.75][n] * rage;
-      // a volley: one where you are heading, the others either side of it
-      const lead = p.x + PW / 2 + p.vx * 0.45;
-      const spread = n === 0 ? [0] : n === 1 ? [-56, 0, 56] : [-84, -28, 28, 84];
-      for (const off of spread) {
-        const tx = Math.max(L.arena.x0 + 16, Math.min(L.arena.x1 - 16, lead + off + (Math.random() - 0.5) * 10));
-        this.teeth.push({ x: tx, y: 90, vy: 0, wait: 0.38, boss: true });
+    if (bs.dark > 0) bs.dark -= dt;
+    if (bs.calm > 0) bs.calm -= dt;
+    else {
+      bs.toothT -= dt;
+      if (bs.toothT <= 0) {
+        bs.toothT = [1.25, 1.05, 0.95, 0.85][ph - 1] * rate;
+        // a volley: one where you are heading, the others either side of it
+        const lead = p.x + PW / 2 + p.vx * 0.45;
+        for (const off of [[0], [-56, 0, 56], [-70, 0, 70], [-84, -28, 28, 84]][ph - 1]) {
+          const tx = Math.max(L.arena.x0 + 16, Math.min(L.arena.x1 - 16, lead + off + (roll(bs) - 0.5) * 10));
+          this.teeth.push({ x: tx, y: 90, vy: 0, wait: 0.38, boss: true });
+        }
+        this.emit('bossTooth', { x: lead });
       }
-      this.emit('bossTooth', { x: lead });
-    }
-    bs.sawT -= dt;
-    if (bs.sawT <= 0) {
-      bs.sawT = [4.4, 3.6, 2.9][n] * rage;
-      const fromLeft = n === 1 ? false : n === 2 ? Math.random() < 0.5 : true;
-      bs.saws.push({ x: fromLeft ? L.arena.x0 : L.arena.x1, y: L.arena.floor - 13, vx: (fromLeft ? 1 : -1) * (320 + n * 90) });
-      this.emit('bossSaw');
+      bs.sawT -= dt;
+      if (bs.sawT <= 0) {
+        bs.sawT = [4.4, 4.0, 3.6, 3.2][ph - 1] * rate;
+        const fromLeft = roll(bs) < 0.5;
+        // it peeks out of the wall for half a second before it rolls
+        bs.saws.push({ x: fromLeft ? L.arena.x0 + 6 : L.arena.x1 - 6, y: L.arena.floor - 13, vx: (fromLeft ? 1 : -1) * (320 + ph * 50), wait: 0.5 });
+        this.emit('bossSaw');
+      }
+      if (ph >= 2) {
+        bs.fistT -= dt;
+        if (bs.fistT <= 0) {
+          bs.fistT = [0, 2.6, 2.3, 2.0][ph - 1] * rate;
+          const fx = Math.max(L.arena.x0 + 24, Math.min(L.arena.x1 - 24, p.x + PW / 2 + p.vx * 0.3));
+          let land = L.arena.floor;
+          for (let r = 3; r < H; r++) if (this.solid(Math.floor(fx / T), r)) { land = r * T; break; }
+          for (const pl of L.plats) if (fx > pl.x && fx < pl.x + pl.w && pl.y < land && pl.y > 3 * T) land = pl.y;
+          bs.fists.push({ x: fx, land, t: 0 });
+          this.emit('bossFist', { x: fx });
+        }
+      }
+      if (ph >= 4) {
+        bs.darkT -= dt;
+        if (bs.darkT <= 0) { bs.darkT = 4.2 * rate; bs.dark = 0.9; this.emit('bossDark'); }
+      }
     }
     for (const sw of bs.saws) {
+      if (sw.wait > 0) { sw.wait -= dt; continue; }
       sw.x += sw.vx * dt;
       const nx = Math.max(pr.x, Math.min(sw.x, pr.x + pr.w)), ny = Math.max(pr.y, Math.min(sw.y, pr.y + pr.h));
-      if ((nx - sw.x) * (nx - sw.x) + (ny - sw.y) * (ny - sw.y) < 11 * 11) return this.die('boss');
+      if ((nx - sw.x) * (nx - sw.x) + (ny - sw.y) * (ny - sw.y) < 11 * 11) return this.die('bossSaw');
     }
     bs.saws = bs.saws.filter(sw => sw.x > L.arena.x0 - 40 && sw.x < L.arena.x1 + 40);
+    for (const f of bs.fists) {
+      const before = SL.fistY(f, B.y + 60);
+      f.t += dt;
+      const y = SL.fistY(f, B.y + 60);
+      if (y >= f.land - 1 && before < f.land - 1) this.emit('slam', { x: f.x, y: f.land });
+      if (f.t > 0.75 && overlap(pr, { x: f.x - 22, y: y - 34, w: 44, h: 34 })) return this.die('bossFist');
+    }
+    bs.fists = bs.fists.filter(f => f.t < 1.75);
   }
 
   // Crumbling bridge (Rage): every tile you touch drops a moment later
@@ -433,8 +499,31 @@ W.hazards = function (dt) {
 
   // Rising spike floors (Rage): every spike in the strip pops up together, then sinks
   for (const wv of L.waves) {
-    const up = SL.waveUp(wv, this.t);
+    if (!this.waveOn(wv)) continue;
+    const up = SL.waveUp(wv, this.waveTime(wv));
     if (up > 0.5 && p.x + PW > wv.c0 * T + 4 && p.x < wv.c1 * T - 4 && p.y + PH > (wv.row + 1) * T - 16 * up) return this.die('wave');
+  }
+
+  // Laser gates: deadly while lit
+  for (const lz of L.lasers) if (SL.laserState(lz, this.t) === 1 && overlap(pr, { x: lz.x - 3, y: lz.top, w: 6, h: lz.bottom - lz.top })) return this.die('laser');
+  // Swinging blades
+  for (const bl of L.blades) {
+    const q = SL.bladePos(bl, this.t);
+    const nx = Math.max(pr.x, Math.min(q.x, pr.x + pr.w)), ny = Math.max(pr.y, Math.min(q.y, pr.y + pr.h));
+    if ((nx - q.x) * (nx - q.x) + (ny - q.y) * (ny - q.y) < 15 * 15) return this.die('blade');
+  }
+
+  // Peekaboo: a ghost that only drifts after you while your back is turned
+  if (this.has.peekaboo) {
+    const g = this.peek, pcx = p.x + PW / 2, pcy = p.y + PH / 2;
+    if (!g.on && p.x > this.respawnAt.x + 3 * T) { g.on = true; g.x = pcx - 8 * T; g.y = pcy - 30; this.markSeen('peekaboo'); this.emit('peekWake'); }
+    if (g.on) {
+      const away = (g.x < pcx) === (p.face > 0), d = Math.hypot(pcx - g.x, pcy - g.y) || 1;
+      g.frozen = !away;
+      if (away) { const sp = [120, 130, 140, 150, 160][L.gt]; g.x += (pcx - g.x) / d * sp * dt; g.y += (pcy - g.y) / d * sp * dt; }
+      else if (d < 4 * T) g.close = true;
+      if (d < 16) return this.die('peekaboo');
+    }
   }
 
   // Spite Coins
@@ -477,7 +566,7 @@ W.hazards = function (dt) {
     if (th.done) continue;
     if (th.wait > 0) { th.wait -= dt; continue; }
     th.vy += 2600 * dt; th.y += th.vy * dt;
-    if (overlap(pr, { x: th.x - 7, y: th.y + 2, w: 14, h: 18 })) return this.die(th.boss ? 'boss' : 'ceilingTeeth');
+    if (overlap(pr, { x: th.x - 7, y: th.y + 2, w: 14, h: 18 })) return this.die(th.boss ? 'bossTooth' : 'ceilingTeeth');
     if (SL.isSolid(this.code(Math.floor(th.x / T), Math.floor((th.y + 20) / T)))) { th.done = true; this.emit('toothLand', { x: th.x, y: th.y + 20 }); }
   }
   this.teeth = this.teeth.filter(th => !th.done && th.y < H * T + 40);
@@ -492,8 +581,7 @@ W.hazards = function (dt) {
   if (this.dropT > 0) this.dropT -= dt;
   if (this.has.impatient) {
     const st = this.still, c = Math.floor((p.x + PW / 2) / T);
-    const cp = L.checkpoint;
-    const safe = c < 8 || (cp && Math.abs(c - Math.floor(cp.x / T)) <= 2) || p.groundPlat;
+    const safe = c < 8 || L.checkpoints.some(cp => Math.abs(c - Math.floor(cp.x / T)) <= 2) || p.groundPlat || (L.arena && p.x > L.arena.x0 - 2 * T);
     if (p.grounded && !safe && Math.abs(p.vx) < 30) {
       if (st.c !== c) { st.c = c; st.t = 0; st.warned = false; }
       st.t += dt;
@@ -593,69 +681,109 @@ W.cheatChecks = function (dt, input) {
   const pcx = p.x + PW / 2, pcy = p.y + PH / 2;
   const pr = this.rect();
 
-  // ----- the boss: pull its three plugs -----
-  if (L.boss) {
-    const bs = this.bossState;
-    L.switches.forEach((sw, i) => {
-      if (!bs.pressed[i] && overlap(pr, { x: sw.x - 18, y: sw.y - 22, w: 36, h: 22 })) {
-        bs.pressed[i] = true; bs.hurt = 0.6;
-        this.emit('unplug', { x: sw.x, y: sw.y, left: bs.pressed.filter(v => !v).length });
+  if (L.boss) { if (this.bossChecks(dt, pr)) return; }
+  else {
+    // ----- exit (Cold Feet) -----
+    const d = this.door;
+    const feetOn = this.remix.coldFeet ? !p.grounded : p.grounded; // remixed: it flees from jumps instead
+    if (d.hop) {
+      d.hop.t += dt / 0.42;
+      const k = Math.min(1, d.hop.t);
+      d.x = d.hop.fx + (d.hop.tx - d.hop.fx) * k;
+      d.y = d.hop.fy + (d.hop.ty - d.hop.fy) * k - Math.sin(k * Math.PI) * 70;
+      if (k >= 1) { d.hop = null; d.x = L.doorSpots[d.spot].x; d.y = L.doorSpots[d.spot].y; }
+    } else {
+      const dr = { x: d.x - 15, y: d.y - 44, w: 30, h: 44 };
+      if (overlap(pr, dr)) {
+        if (!feetOn && this.fled > 0) this.discover('coldFeet');
+        if (this.has.copycat && this.ghost) this.discover('copycat');
+        if (this.has.spikeWall && this.wall.on && p.x - this.wall.x < SL.VIEW_W) this.discover('spikeWall');
+        if (this.has.peekaboo && this.peek.close) this.discover('peekaboo');
+        this.won = true;
+        this.emit('win', { airborne: !p.grounded });
+        return;
       }
-    });
-    if (bs.pressed.every(v => v)) { this.won = true; this.emit('win', { boss: true }); }
-    return this.cheatChecksRest(dt, input);
+      if (this.has.coldFeet && d.hopsLeft > 0 && feetOn && Math.abs(pcx - d.x) < 3 * T && Math.abs(pcy - (d.y - 20)) < 3 * T) {
+        d.spot++; d.hopsLeft--;
+        const s = L.doorSpots[d.spot];
+        d.hop = { t: 0, fx: d.x, fy: d.y, tx: s.x, ty: s.y };
+        this.fled++;
+        this.markSeen('coldFeet');
+        this.emit('flee', { x: d.x, y: d.y, left: d.hopsLeft });
+      }
+    }
+    d.scared = Math.max(0, d.scared - dt);
   }
 
-  // ----- exit (Cold Feet) -----
-  const d = this.door;
-  const feetOn = this.remix.coldFeet ? !p.grounded : p.grounded; // remixed: it flees from jumps instead
-  if (d.hop) {
-    d.hop.t += dt / 0.42;
-    const k = Math.min(1, d.hop.t);
-    d.x = d.hop.fx + (d.hop.tx - d.hop.fx) * k;
-    d.y = d.hop.fy + (d.hop.ty - d.hop.fy) * k - Math.sin(k * Math.PI) * 70;
-    if (k >= 1) { d.hop = null; d.x = L.doorSpots[d.spot].x; d.y = L.doorSpots[d.spot].y; }
-  } else {
-    const dr = { x: d.x - 15, y: d.y - 44, w: 30, h: 44 };
-    if (overlap(pr, dr)) {
-      if (!feetOn && this.fled > 0) this.discover('coldFeet');
-      if (this.has.copycat && this.ghost) this.discover('copycat');
-      if (this.has.spikeWall && this.wall.on && p.x - this.wall.x < SL.VIEW_W) this.discover('spikeWall');
-      this.won = true;
-      this.emit('win', { airborne: !p.grounded });
-      return;
-    }
-    if (this.has.coldFeet && d.hopsLeft > 0 && feetOn && Math.abs(pcx - d.x) < 3 * T && Math.abs(pcy - (d.y - 20)) < 3 * T) {
-      d.spot++; d.hopsLeft--;
-      const s = L.doorSpots[d.spot];
-      d.hop = { t: 0, fx: d.x, fy: d.y, tx: s.x, ty: s.y };
-      this.fled++;
-      this.markSeen('coldFeet');
-      this.emit('flee', { x: d.x, y: d.y, left: d.hopsLeft });
-    }
-  }
-  d.scared = Math.max(0, d.scared - dt);
-
-  // ----- checkpoint (Backwards Flag) -----
-  const cp = L.checkpoint;
-  if (cp && !this.cpReal && overlap(pr, { x: cp.x - 8, y: cp.y - 56, w: 16, h: 56 })) {
+  // ----- checkpoint camps (Backwards Flag) -----
+  L.checkpoints.forEach((cp, i) => {
+    const st = this.cps[i];
+    if (st.real || !overlap(pr, { x: cp.x - 8, y: cp.y - 56, w: 16, h: 56 })) return;
+    if (cp.x < this.respawnAt.x + PW / 2 - 4) return; // a camp behind your save point changes nothing
     const fromBehind = this.remix.backwardsFlag ? !p.grounded : p.vx < -20;
-    if (!this.has.backwardsFlag || fromBehind) {
-      this.cpReal = true;
+    if (cp.honest || !this.has.backwardsFlag || fromBehind) {
+      st.real = true; this.cpReal = true; this.cpFake = false;
       this.respawnAt = { x: cp.x - PW / 2, y: cp.y - PH };
       this.stats.cpTouches++;
-      if (this.has.backwardsFlag) { this.markSeen('backwardsFlag'); this.discover('backwardsFlag'); }
-      this.emit('checkpoint', { real: true });
-    } else if (!this.cpFake) {
-      this.cpFake = true;
+      if (this.has.backwardsFlag && !cp.honest) { this.markSeen('backwardsFlag'); this.discover('backwardsFlag'); }
+      this.emit('checkpoint', { real: true, x: cp.x, y: cp.y, n: cp.n, of: cp.of, honest: cp.honest });
+    } else if (!st.fake) {
+      st.fake = true; this.cpFake = true;
       this.stats.cpTouches++;
       this.markSeen('backwardsFlag');
-      this.emit('checkpoint', { real: false });
+      this.emit('checkpoint', { real: false, x: cp.x, y: cp.y, n: cp.n, of: cp.of });
     }
-  }
+  });
 
   this.cheatChecksRest(dt, input);
 };
+
+// The boss fight: walk in and it starts. Plugs come out one at a time; each one is a hit.
+// Returns true when the fight is won.
+W.bossChecks = function (dt, pr) {
+  const L = this.L, bs = this.bossState, p = this.p;
+  if (!bs.started && p.x > L.arena.x0 + T) {
+    bs.started = true; bs.plugT = 1.2; bs.calm = 1.4;
+    if (bs.phase >= 3) bs.waveT0 = this.t + 1.4;
+    // the door camp always counts, so a death in here never sends you back through the run
+    const cp = L.checkpoints[L.checkpoints.length - 1];
+    if (cp && cp.honest) { this.respawnAt = { x: cp.x - PW / 2, y: cp.y - PH }; this.cpReal = true; this.cps[L.checkpoints.length - 1].real = true; }
+    this.emit('arena', { first: !bs.seen, phase: bs.phase, lives: bs.lives });
+    bs.seen = true;
+  }
+  if (!bs.started || bs.hp <= 0) return false;
+  if (!bs.plug) { bs.plugT -= dt; if (bs.plugT <= 0) this.spawnPlug(); return false; }
+  if (!overlap(pr, { x: bs.plug.x - 16, y: bs.plug.y - 26, w: 32, h: 26 })) return false;
+  const at = bs.plug;
+  bs.plug = null; bs.hp--; bs.hurt = 0.7; bs.plugT = 1.3;
+  const B = L.boss, ph = Math.min(B.phases, Math.floor((bs.maxHp - bs.hp) / B.perPhase) + 1);
+  const up = ph > bs.phase && bs.hp > 0;
+  this.emit('unplug', { hp: bs.hp, maxHp: bs.maxHp, phaseUp: up, x: at.x, y: at.y });
+  if (up) {
+    bs.phase = ph; bs.calm = 2.2; bs.plugT = 2.4; bs.saws = []; bs.fists = []; this.teeth = [];
+    if (ph >= 3) bs.waveT0 = this.t + 2.2;
+    this.emit('bossPhase', { phase: ph });
+  }
+  if (bs.hp <= 0) { this.won = true; this.emit('win', { boss: true, final: !!B.final }); return true; }
+  return false;
+};
+W.spawnPlug = function () {
+  const bs = this.bossState, L = this.L, pcx = this.p.x + PW / 2;
+  const all = L.plugSpots.map((s, i) => i).filter(i => i !== bs.lastSpot);
+  const far = all.filter(i => Math.abs(L.plugSpots[i].x - pcx) > 7 * T);
+  const pool = far.length ? far : all;
+  const i = pool[Math.floor(roll(bs) * pool.length)];
+  bs.lastSpot = i;
+  bs.plug = { x: L.plugSpots[i].x, y: L.plugSpots[i].y };
+  this.emit('plugOut', { x: bs.plug.x, y: bs.plug.y });
+};
+// Boss floor strips only run in their phase, on a clock that starts when the phase does.
+W.waveOn = function (wv) {
+  if (!wv.bossPhase) return true;
+  const bs = this.bossState;
+  return !!(bs && bs.started && bs.hp > 0 && bs.phase >= wv.bossPhase && this.t >= (bs.waveT0 || 0));
+};
+W.waveTime = function (wv) { return wv.bossPhase ? this.t - (this.bossState.waveT0 || 0) : this.t; };
 
 W.cheatChecksRest = function (dt, input) {
   const p = this.p, L = this.L;
@@ -727,6 +855,26 @@ SL.waveUp = function (wv, t) {
   if (u < wv.down - 0.25) return 0;
   if (u < wv.down) return (u - (wv.down - 0.25)) / 0.25 * 0.3; // a little warning wiggle
   return 1;
+};
+
+// A boss fist's bottom edge: a warning beat up top, a fast slam, a short rest, then back up.
+SL.fistY = function (f, top) {
+  const t = f.t;
+  if (t < 0.75) return top;
+  if (t < 0.87) return top + (f.land - top) * (t - 0.75) / 0.12;
+  if (t < 1.25) return f.land;
+  return f.land + (top - f.land) * Math.min(1, (t - 1.25) / 0.5);
+};
+// Laser gates: 1 lit (deadly), 0.5 the warning flicker just before, 0 off.
+SL.laserState = function (lz, t) {
+  const u = ((t + lz.phase) % lz.period + lz.period) % lz.period;
+  if (u < lz.on) return 1;
+  return u > lz.period - 0.35 ? 0.5 : 0;
+};
+// A swinging blade's centre.
+SL.bladePos = function (bl, t) {
+  const a = bl.amp * Math.sin(bl.phase + t * bl.omega);
+  return { x: bl.ax + Math.sin(a) * bl.len, y: bl.ay + Math.cos(a) * bl.len, a };
 };
 
 SL.sawPos = function (sw, t) {

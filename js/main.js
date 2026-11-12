@@ -91,6 +91,7 @@ try { if (!tamper && !lastWrite && localStorage.getItem(KEY)) lastWrite = { json
 // Older saves can name cheats that were retired; drop them.
 if (!SL.DIFFS[save.diff]) save.diff = 'normal';
 save.stats2 = Object.assign({ clean: 0, hard: 0, rage: 0, maxDeathsCleared: 0, fastest: 0, twists: {}, grabbed: 0, dailies: 0, bestStreak: 0, maxPacts: 0, boxes: 0, endings: 0, maxNgBeaten: -1 }, save.stats2);
+if (!save.metTraps || typeof save.metTraps !== 'object') save.metTraps = {};
 save.equip = Object.assign({ skin: 'sunny', hat: 'sprout', trail: 'dust', death: 'pop', pin: 'nopin', dye: 'none' }, save.equip);
 for (const k of ['skin', 'hat', 'trail', 'death', 'pin']) if (!SL.ITEM[save.equip[k]]) save.equip[k] = SL.ITEMS.find(i => i.slot === k && i.free).id;
 if (!SL.DYE[save.equip.dye]) save.equip.dye = 'none';
@@ -147,6 +148,8 @@ const ICON = {
   runaway: '<svg viewBox="0 0 40 40"><path d="M18 16h18v20H18z" fill="#e2a96f" stroke="#3b2a40" stroke-width="2.5"/><path d="M18 16h18" stroke="#6dd08b" stroke-width="4"/><path d="M4 20h9M6 25h7M4 30h9" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round"/><path d="M26 8h8M31 5l3 3-3 3" fill="none" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   lunger: '<svg viewBox="0 0 40 40"><path d="M16 32l7-18 7 18z" fill="#eef2fb" stroke="#3b2a40" stroke-width="2.3" stroke-linejoin="round"/><circle cx="21" cy="25" r="1.5" fill="#ff4f6e"/><circle cx="25" cy="25" r="1.5" fill="#ff4f6e"/><path d="M3 22h9M5 27h8M3 32h9" stroke="#3b2a40" stroke-width="2.2" stroke-linecap="round"/><path d="M2 33h36" stroke="#3b2a40" stroke-width="2.5"/></svg>',
   spikeWall: '<svg viewBox="0 0 40 40"><rect x="2" y="3" width="12" height="34" fill="#4a1735" stroke="#3b2a40" stroke-width="2.5"/><path d="M14 5l8 4-8 4M14 15l8 4-8 4M14 25l8 4-8 4" fill="#eef2fb" stroke="#3b2a40" stroke-width="2" stroke-linejoin="round"/><circle cx="31" cy="24" r="6" fill="#ffcb3d" stroke="#3b2a40" stroke-width="2.3"/><path d="M27 15l6 3" stroke="#3b2a40" stroke-width="2" stroke-linecap="round"/></svg>',
+  peekaboo: '<svg viewBox="0 0 40 40"><path d="M8 34V17a12 12 0 0 1 24 0v17l-4-3-4 3-4-3-4 3-4-3z" fill="#f4f1ff" stroke="#3b2a40" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="15.5" cy="18" rx="4.5" ry="3.5" fill="#d9d2e6" stroke="#3b2a40" stroke-width="2"/><ellipse cx="24.5" cy="18" rx="4.5" ry="3.5" fill="#d9d2e6" stroke="#3b2a40" stroke-width="2"/></svg>',
+  lagZone: '<svg viewBox="0 0 40 40"><rect x="4" y="6" width="32" height="28" rx="4" fill="#c9a7ff" stroke="#3b2a40" stroke-width="2.5"/><path d="M8 12h4M16 11h3M24 13h5M9 19h6M20 18h3M27 20h4M8 26h3M15 27h5M25 26h6" stroke="#fffaf2" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="20" r="7" fill="#fffaf2" stroke="#3b2a40" stroke-width="2.2"/><path d="M20 16v4l3 2" stroke="#3b2a40" stroke-width="2" stroke-linecap="round" fill="none"/></svg>',
   backwardsFlag: '<svg viewBox="0 0 40 40"><path d="M14 4v32" stroke="#3b2a40" stroke-width="3" stroke-linecap="round"/><path d="M15 5c6 2 10 0 16 3l-4 5 4 5c-6-3-10-1-16-3z" fill="#6fdc98" stroke="#3b2a40" stroke-width="2.2" stroke-linejoin="round"/><path d="M36 30H22m0 0l4-4m-4 4l4 4" stroke="#3b2a40" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 const UNKNOWN_ICON = '<svg viewBox="0 0 40 40"><text x="20" y="28" font-size="24" font-weight="700" text-anchor="middle" fill="#3b2a40" font-family="Fredoka,sans-serif">?</text></svg>';
@@ -301,9 +304,10 @@ function refreshCounts() {
 }
 
 // Adds one more cheat the level does not have yet (pacts and New Game+), respecting clashes.
-function addCheat(cheats, key) {
+function addCheat(cheats, key, level) {
   const r = SL.rng(SL.hashStr(key));
-  const pool = IDS.filter(id => cheats.indexOf(id) < 0 && !cheats.some(c => (SL.CLASH[c] || []).indexOf(id) >= 0));
+  const pool = IDS.filter(id => cheats.indexOf(id) < 0 && !cheats.some(c => (SL.CLASH[c] || []).indexOf(id) >= 0)
+    && !(SL.isBossLevel(level) && SL.BOSS_BAN.indexOf(id) >= 0) && (SL.CHEATS[id].minLevel || 0) - 50 <= level);
   if (pool.length) cheats.push(r.pick(pool));
 }
 function forceCheat(cheats, id) {
@@ -315,13 +319,14 @@ function levelPlan(level) {
   const pk = JSON.stringify(save.pacts) + ':' + save.ng;
   if (save.cur && save.cur.level === level && save.cur.seed === save.runSeed && save.cur.diff === save.diff && save.cur.pk === pk) return save.cur;
   let cheats = [], reasons = [], intro = null;
-  if (level !== 100) {
+  {
     const pick = SL.Profile.choose(level, save.sheet, save.profile, save.last, save.runSeed, save.diff);
     cheats = pick.cheats; reasons = pick.reasons; intro = pick.intro;
-    if (save.ng && level > 1) addCheat(cheats, save.runSeed + ':ng:' + level);
-    if (save.pacts.extra) addCheat(cheats, save.runSeed + ':pact:' + level);
-    if (save.pacts.shadow) forceCheat(cheats, 'copycat');
-    if (save.pacts.wall) forceCheat(cheats, 'spikeWall');
+    if (save.ng && level > 1) addCheat(cheats, save.runSeed + ':ng:' + level, level);
+    if (save.pacts.extra) addCheat(cheats, save.runSeed + ':pact:' + level, level);
+    // the chaser pacts sit out boss levels: nothing follows you into the arena
+    if (save.pacts.shadow && !SL.isBossLevel(level)) forceCheat(cheats, 'copycat');
+    if (save.pacts.wall && !SL.isBossLevel(level)) forceCheat(cheats, 'spikeWall');
   }
   save.cur = { level, seed: save.runSeed, diff: save.diff, pk, cheats, reasons, intro };
   if (intro) sheetOf(intro).met = true;
@@ -371,9 +376,10 @@ function setupAttract() {
 const SCREENS = ['s-title', 's-pause', 's-clear', 's-sheet', 's-dossier', 's-shop', 's-trophies', 's-pacts', 's-end', 's-card', 's-settings'];
 function enterPlay(levelLabel, restart) {
   R.setWorld(world); R.attract = false;
-  SL.Audio.music(SL.Audio.trackFor(R.themeId, world.L.diff, world.L.ng || 0, { boss: !!world.L.boss }));
-  $('stage').classList.toggle('boss', !!world.L.boss);
-  document.body.classList.toggle('boss-fight', !!world.L.boss);
+  // boss levels play the world's music on the run; the boss track starts at the arena door
+  SL.Audio.music(SL.Audio.trackFor(R.themeId, world.L.diff, world.L.ng || 0, { boss: false }));
+  $('stage').classList.remove('boss');
+  document.body.classList.remove('boss-fight');
   mode = 'play'; overlay = null;
   for (const s of SCREENS) show(s, false);
   show('hud', true); show('touch', touchy);
@@ -390,7 +396,6 @@ function startLevel(level, restart) {
   const made = makeWorld(level);
   world = made.world; levelInfo = made.plan; levelTime = 0; session = 'run';
   enterPlay(level, restart);
-  if (level === 100) { if (!restart) for (const [t, m] of SL.VOICE.boss) say(t, m, { hold: 2.6, prio: 2 }); return; }
   const tier = SL.tierOf(level), mood = SL.MOODS[tier];
   if (!save.booted) {
     save.booted = true; persist();
@@ -400,6 +405,13 @@ function startLevel(level, restart) {
     if (levelInfo.reasons && levelInfo.reasons.length) say(levelInfo.reasons[0], 'smug', { hold: 3.2 });
   }
   if (!restart && world.L.twist) say(SL.TWISTS[world.L.twist].say, 'smug', { hold: 2.6 });
+  if (!restart && world.L.boss) say(SL.VOICE.bossRun[level], 'angry', { hold: 3, prio: 2 });
+  // a trap you have never met gets a proper introduction
+  for (const k of world.L.trapKinds) {
+    if (save.metTraps[k]) continue;
+    save.metTraps[k] = true; persist();
+    setTimeout(() => { toast('spot', 'New trap', SL.TRAPS[k].name, TROPHY_ICON); say(SL.TRAPS[k].say, 'smug', { hold: 3, prio: 3 }); }, 1400);
+  }
   if (!restart && save.ng && level === 1) say(SL.say(SL.VOICE.ngStart, { n: save.ng }), 'glitch', { hold: 3, prio: 2 });
 }
 const restartCurrent = () => { if (session === 'daily') startDaily(true); else startLevel(world.L.level, true); };
@@ -432,10 +444,10 @@ function handle(e) {
         break;
       }
       checkTrophies(live);
-      const fake = world.cpFake && !world.cpReal;
+      const fake = world.cpFake;
       if (fake) say(SL.say(SL.VOICE.fakeSave), 'smug', { prio: 2 });
       else if (e.cause === 'ceilSpike') say(SL.say(SL.VOICE.death.ceilSpike), 'smug', { prio: 2 });
-      else if (Math.random() < 0.7) quip(SL.VOICE.death[e.cause] || SL.VOICE.death.pit, e.cause === 'pit' || e.cause === 'spike' ? 'happy' : 'smug');
+      else if (Math.random() < 0.7) quip(SL.VOICE.death[e.cause] || (/^boss/.test(e.cause) ? SL.VOICE.death.boss : SL.VOICE.death.pit), e.cause === 'pit' || e.cause === 'spike' ? 'happy' : 'smug');
       break;
     }
     case 'flee':
@@ -448,9 +460,27 @@ function handle(e) {
     case 'pop': SL.Audio.play('pop'); break;
     case 'checkpoint':
       SL.Audio.play('save');
-      if (!world.has.backwardsFlag) say('Checkpoint saved.', 'happy', { hold: 1.6 });
+      if (e.honest) say(SL.say(SL.VOICE.bossCamp), 'smug', { hold: 2 });
+      else if (!world.has.backwardsFlag) say(SL.say(e.n === e.of && !world.L.boss ? SL.VOICE.campLast : SL.VOICE.campSaved, { n: e.n }), 'happy', { hold: 1.8 });
       else say(SL.say(e.real ? SL.VOICE.trigger.savedReal : SL.VOICE.trigger.savedFake), e.real ? 'angry' : 'happy', { prio: 2, hold: 1.8 });
       break;
+    case 'arena': {
+      SL.Audio.music(SL.Audio.trackFor(R.themeId, world.L.diff, world.L.ng || 0, { boss: true }));
+      $('stage').classList.add('boss'); document.body.classList.add('boss-fight');
+      if (e.first) for (const [t, m] of SL.VOICE.bossIntro[world.L.level]) say(t, m, { hold: 2.6, prio: 2 });
+      else say(SL.say(SL.VOICE.bossAgain), 'smug', { hold: 2.2, prio: 2 });
+      break;
+    }
+    case 'plugOut': SL.Audio.play('reveal'); break;
+    case 'bossPhase': SL.Audio.play('rankUp'); say(SL.say(SL.VOICE.bossPhase[e.phase]), 'glitch', { prio: 4, hold: 2.4 }); break;
+    case 'bossFist': SL.Audio.play('lunge'); break;
+    case 'bossDark': SL.Audio.play('thunder'); break;
+    case 'bossLife':
+      if (e.wipe) break;
+      say(SL.say(e.lives === 1 ? SL.VOICE.bossLastLife : SL.VOICE.bossLife), 'smug', { prio: 3, hold: 2 });
+      break;
+    case 'bossReset': SL.Audio.play('unplug'); say(SL.say(SL.VOICE.bossReset), 'glitch', { prio: 4, hold: 2.6 }); break;
+    case 'peekWake': SL.Audio.play('seen'); if (!world.saidPeek) { world.saidPeek = true; say(SL.say(SL.VOICE.peekWake), 'smug', { prio: 2 }); } break;
     case 'sign': SL.Audio.play('click'); break;
     case 'down':
       if (world.L.level === 1 && !world.saidDown) { world.saidDown = true; say(SL.say(SL.VOICE.trigger.down), 'smug', { prio: 2 }); }
@@ -462,7 +492,7 @@ function handle(e) {
     case 'floorDrop': SL.Audio.play('drop'); break;
     case 'wake': SL.Audio.play('seen'); if (!world.saidWake) { world.saidWake = true; say(SL.say(SL.VOICE.trigger.wake), 'smug', { prio: 2 }); } break;
     case 'tooth': SL.Audio.play('drop'); break;
-    case 'unplug': SL.Audio.play('unplug'); say(SL.say(e.left === 2 ? SL.VOICE.unplug1 : e.left === 1 ? SL.VOICE.unplug2 : SL.VOICE.unplug3), 'glitch', { prio: 3, hold: 2 }); break;
+    case 'unplug': SL.Audio.play('unplug'); if (!e.phaseUp && e.hp > 0) say(SL.say(e.hp === 1 ? SL.VOICE.bossLast : SL.VOICE.bossHit), 'glitch', { prio: 3, hold: 1.8 }); break;
     case 'bossTooth': SL.Audio.play('bossTooth'); break;
     case 'bossSaw': SL.Audio.play('bossSaw'); break;
     case 'bubblePop': SL.Audio.play('shieldPop'); say('Bubble popped. Lucky.', 'angry', { prio: 2 }); break;
@@ -502,7 +532,7 @@ function handle(e) {
     }
     case 'win': {
       SL.Audio.play('win');
-      if (e.boss) { say(SL.VOICE.bossDown, 'glitch', { prio: 4, hold: 2 }); setTimeout(finishLevel, 1600); break; }
+      if (e.boss) { say(e.final ? SL.VOICE.bossDown : SL.VOICE.miniBossDown[[25, 50, 75].indexOf(world.L.level)] || SL.VOICE.bossDown, 'glitch', { prio: 4, hold: 2.2 }); setTimeout(finishLevel, 1600); break; }
       setTimeout(finishLevel, 650);
       break;
     }
@@ -545,7 +575,7 @@ function finishLevel(opts) {
   const deaths = st.deaths, jumps = st.jumps;
   const assisted = world.assisted || !!opts.skipped;
   const grabbed = opts.skipped ? 0 : world.coinsGot.size;
-  const daily = session === 'daily', boss = !!L.boss;
+  const daily = session === 'daily', boss = !!L.boss, final = boss && !!L.boss.final;
   let pay = { rows: [], total: 0 };
   if (opts.skipped) pay = { rows: [['Skipped. No coins. Coward.', 0]], total: 0 };
   else if (daily) {
@@ -561,7 +591,7 @@ function finishLevel(opts) {
     const prev = save.daily && save.daily.key === dp.key ? save.daily : null;
     save.daily = { key: dp.key, done: true, best: prev && prev.done ? Math.min(prev.best, deaths) : deaths, bestTime: prev && prev.done ? Math.min(prev.bestTime, levelTime) : levelTime, last: deaths, lastTime: levelTime };
   } else {
-    pay = SL.payout(L.level, deaths, grabbed, L.diff, L.twist, { pacts: save.pacts, ng: L.ng, assisted, boss });
+    pay = SL.payout(L.level, deaths, grabbed, L.diff, L.twist, { pacts: save.pacts, ng: L.ng, assisted, boss: boss ? L.level : 0 });
   }
   save.coins += pay.total;
   const s2 = save.stats2;
@@ -577,17 +607,18 @@ function finishLevel(opts) {
       if (L.diff === 'rage' && !deaths) s2.rageClean = (s2.rageClean || 0) + 1;
       if (L.diff === 'rage' && L.twist === 'mirror') s2.rageMirror = true;
       if (!daily && L.level >= 50 && SL.PACTS.filter(pc => save.pacts[pc.id]).length >= 4) s2.deepPacts = true;
-      if (boss && !deaths) s2.bossClean = true;
+      if (final && world.bossState.livesLost === 0) s2.bossClean = true;
+      if (boss && !final) s2.miniBoss = (s2.miniBoss || 0) + 1;
       if (!daily) s2.maxPacts = Math.max(s2.maxPacts, SL.PACTS.filter(pc => save.pacts[pc.id]).length);
       addMastery(L.cheats);
     }
-    if (!daily) addXP(20 + L.tier * 6 + Math.min(30, deaths * 2) + (boss ? 500 : 0));
+    if (!daily) addXP(20 + L.tier * 6 + Math.min(30, deaths * 2) + (final ? 500 : boss ? 150 : 0));
   }
-  if (boss) { s2.endings++; s2.maxNgBeaten = Math.max(s2.maxNgBeaten, L.ng || 0); s2.bossBy = s2.bossBy || {}; s2.bossBy[L.diff] = (s2.bossBy[L.diff] || 0) + 1; }
+  if (final) { s2.endings++; s2.maxNgBeaten = Math.max(s2.maxNgBeaten, L.ng || 0); s2.bossBy = s2.bossBy || {}; s2.bossBy[L.diff] = (s2.bossBy[L.diff] || 0) + 1; }
   commitStats();
   if (!daily) {
     save.profile.levels++;
-    if (L.checkpoint) save.profile.cpLevels++;
+    if (L.checkpoints.length) save.profile.cpLevels++;
     save.cleared++;
     save.last = L.cheats.slice();
     save.level = L.level + 1;
@@ -598,7 +629,7 @@ function finishLevel(opts) {
   }
   persist();
   hushVoice();
-  if (boss) { showEnding(pay); return; }
+  if (final) { showEnding(pay); return; }
   // card
   const tier = L.tier;
   $('c-eyebrow').textContent = daily ? `Daily Grudge #${dailyNumber(save.daily.key)}` : 'Level ' + L.level + (L.ng ? ' · NG+' + L.ng : '');
@@ -620,7 +651,7 @@ function finishLevel(opts) {
   }
   lastClear = { level: L.level, diff: L.diff, ng: L.ng || 0, deaths, time: levelTime, coins: pay.total, cheats: L.cheats.length, twist: L.twist ? SL.TWISTS[L.twist].name : '', world: SL.themeName(L.diff, L.ng || 0) };
   show('c-share', !opts.skipped); show('c-pacts', !daily);
-  $('c-next').innerHTML = daily ? 'Back to title' : (L.level + 1 === 100 ? 'Face the Game <kbd>Enter</kbd>' : 'Next level <kbd>Enter</kbd>');
+  $('c-next').innerHTML = daily ? 'Back to title' : (L.level + 1 === 100 ? 'Face the Game <kbd>Enter</kbd>' : SL.isBossLevel(L.level + 1) ? 'Boss level <kbd>Enter</kbd>' : 'Next level <kbd>Enter</kbd>');
   mode = 'clear';
   show('hud', false); show('touch', false);
   show('s-clear', true);

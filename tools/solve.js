@@ -2,7 +2,8 @@
 // human-sized inputs (0.1s steps, so a "short hop" is a 0.1s tap) and reports any level
 // no route can finish. Catches combinations the static validator cannot see: twists that
 // change jump height, timed hazards next to "keep moving" cheats, and so on.
-// Usage: node tools/solve.js [quick|full] [jobsFilter]
+// On a boss level the run counts as solved once you reach the arena; `boss` mode fights the boss itself.
+// Usage: node tools/solve.js [quick|full|boss] [jobsFilter]
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
@@ -65,14 +66,16 @@ function solve(ctx, L, opts) {
         for (let f = 0; f < STEP; f++) {
           const inp = { left: a.dir < 0, right: a.dir > 0, jump: a.j > 0, jumpPressed: a.j === 1 && f === 0, down: false };
           w.update(DT, inp);
-          if (w.won) return { ok: true, depth, t: depth * STEP * DT };
+          if (w.won || (w.bossState && w.bossState.started)) return { ok: true, depth, t: depth * STEP * DT };
           if (!w.p.alive) { dead = true; const c = w.events.find(e => e.type === 'death'); if (c) deathCauses[c.cause] = (deathCauses[c.cause] || 0) + 1; break; }
         }
         w.events.length = 0;
         if (dead) continue;
         const p = w.p;
         const key = [Math.floor(p.x / 4), Math.floor(p.y / 4), Math.round(p.vx / 40), Math.round(p.vy / 80), a.j === 1 ? 1 : a.j === 2 ? Math.min(node.held + 1, MINHOLD + 1) : 0,
-          w.swapped ? 1 : 0, w.dropped.size, w.door.spot, w.cpReal ? 1 : 0, w.shown.size].join(',');
+          w.swapped ? 1 : 0, w.dropped.size, w.door.spot, w.cpReal ? 1 : 0, w.shown.size,
+          // inside lag, the next quarter-second is already decided by queued keys: they are part of the state
+          w.lagNow ? w.inBuf.slice(-30).map(i => (i.jump ? 1 : 0) + (i.jumpPressed ? 2 : 0) + (i.right ? 4 : 0) + (i.left ? 8 : 0)).join('') : ''].join(',');
         if (seen.has(key)) continue;
         seen.add(key);
         kids.push({ s: snap(ctx, w), held: a.j === 1 ? 1 : a.j === 2 ? node.held + 1 : 0, x: p.x, y: p.y, vx: p.vx, g: p.grounded });
@@ -99,6 +102,71 @@ function solve(ctx, L, opts) {
   return { ok: false, best, deathCauses, timeout: true };
 }
 
+// The boss: start at the door camp, then search plug by plug. Each search runs until the boss loses
+// a hit, scoring states by distance to the plug that is out. Deaths are pruned, so a win here means
+// the whole fight can be done without losing a life, at human input timing.
+function solveBoss(ctx, L, opts) {
+  const SL = ctx.SL, T = SL.TILE;
+  const w = new SL.World(L, { bonks: 0, crumbleSurvive: 0, causes: {} });
+  const cp = L.checkpoints[L.checkpoints.length - 1];
+  w.respawnAt = { x: cp.x - SL.PW / 2, y: cp.y - SL.PH }; w.reset();
+  const CAP = opts.cap || 260, PER = opts.per || 3;
+  let s0 = [{ s: snap(ctx, w), held: 0 }], t = 0;
+  const log = [];
+  const deathCauses = {};
+  for (let leg = 0; leg < 40; leg++) {
+    restore(ctx, w, s0[0].s);
+    const hp0 = w.bossState.hp;
+    // the next search starts from every way the last hit happened, not just the first one found:
+    // the first can be a doomed moment (a tooth already falling on the plug), which a player would avoid
+    let beam = s0, found = null, depth = 0, firstHit = -1;
+    let lastDeaths = {};
+    for (; depth < 160 && !(found && depth > firstHit + 6); depth++) {
+      const seen = new Set(), kids = [];
+      lastDeaths = {};
+      for (const node of beam) {
+        for (const a of ACTS) {
+          if (a.j === 2 && !node.held) continue;
+          restore(ctx, w, node.s);
+          let dead = false;
+          for (let f = 0; f < 12; f++) {
+            w.update(DT, { left: a.dir < 0, right: a.dir > 0, jump: a.j > 0, jumpPressed: a.j === 1 && f === 0, down: false });
+            if (!w.p.alive) { dead = true; const c = w.events.find(e => e.type === 'death'); if (c) { deathCauses[c.cause] = (deathCauses[c.cause] || 0) + 1; lastDeaths[c.cause] = (lastDeaths[c.cause] || 0) + 1; } break; }
+            if (w.won || w.bossState.hp < hp0) break;
+          }
+          w.events.length = 0;
+          if (dead) continue;
+          const p = w.p, bs = w.bossState;
+          if (w.won || bs.hp < hp0) { if (!found) firstHit = depth; (found = found || []).push({ s: snap(ctx, w), held: a.j > 0 ? 1 : 0, won: w.won }); continue; }
+          // with a plug out, head for it; while waiting for one, keep off the floor like a player would
+          const tg = bs.plug || (!bs.started ? { x: L.arena.x0 + 3 * T, y: L.arena.floor } : null);
+          // a started fight always outranks loitering at the door
+          const score = (bs.started ? 1e5 : 0) + (tg ? -(Math.abs(p.x + SL.PW / 2 - tg.x) + 2.2 * Math.abs(p.y + SL.PH - tg.y)) : -Math.abs(p.y + SL.PH - 8 * T));
+          const key = [Math.floor(p.x / 6), Math.floor(p.y / 6), Math.round(p.vx / 60), Math.round(p.vy / 120), a.j > 0 ? 1 : 0, bs.plug ? 1 : 0].join(',');
+          if (seen.has(key)) continue;
+          seen.add(key);
+          kids.push({ s: snap(ctx, w), held: a.j > 0 ? 1 : 0, score, cell: Math.floor(p.x / T) * 100 + Math.floor(p.y / T) });
+        }
+        if (found && found.length >= 60) break;
+      }
+      if (found && (found.length >= 60 || found.some(f => f.won))) break;
+      if (!kids.length && found) break;
+      if (!kids.length) {
+        const pg = w.bossState.plug, a0 = L.arena.x0 / T;
+        return { ok: false, t: t + depth * 0.1, hp: hp0, phase: w.bossState.phase, deathCauses, log, lastDeaths, plug: pg ? [Math.round(pg.x / T - a0), pg.y / T] : null };
+      }
+      kids.sort((a, b) => b.score - a.score);
+      const per = new Map(); beam = [];
+      for (const k of kids) { const n = per.get(k.cell) || 0; if (n >= PER) continue; per.set(k.cell, n + 1); beam.push(k); if (beam.length >= CAP) break; }
+    }
+    if (!found) return { ok: false, t, hp: hp0, phase: w.bossState.phase, deathCauses, log, timeout: true };
+    t += (depth + 1) * 0.1; log.push(Math.round(t));
+    if (found.some(f => f.won)) return { ok: true, t, log, deathCauses };
+    s0 = found;
+  }
+  return { ok: false, t, log, deathCauses };
+}
+
 function ascii(SL, L, col) {
   const ch = { 0: '.', 1: '#', 2: '^', 3: 'f', 4: 'b', 5: 'o', 6: 'c', 7: 'p', 8: 's', 9: '@', 10: 'v', 11: 'i', 12: '%' };
   const a = Math.max(0, col - 10), b = Math.min(L.w - 1, col + 14), rows = [];
@@ -118,13 +186,13 @@ if (!isMainThread) {
     try {
       L = SL.buildLevel(job.seed, job.level, job.cheats, job.diff, { ng: job.ng || 0, twist: job.twist, pacts: job.pacts });
       ctx.__r = 12345;
-      res = solve(ctx, L, job.opts || {});
+      res = job.boss ? solveBoss(ctx, L, job.opts || {}) : solve(ctx, L, job.opts || {});
       if (!res.ok) res.map = ascii(SL, L, Math.floor(res.best / SL.TILE));
     } catch (e) { res = { ok: false, err: e.message }; }
     parentPort.postMessage({ job, res, ms: Date.now() - t0, w: L && L.w, twist: L && L.twist });
   });
 } else if (require.main !== module) {
-  module.exports = { loadSL, snap, restore, solve };
+  module.exports = { loadSL, snap, restore, solve, solveBoss };
 } else {
   const ctx = loadSL(), SL = ctx.SL;
   const mode = process.argv[2] || 'quick';
@@ -133,6 +201,32 @@ if (!isMainThread) {
   const diffs = ['normal', 'hard', 'rage'];
   if (mode === 'one') {
     jobs.push(JSON.parse(process.argv[3]));
+  } else if (mode === 'new') {
+    // what changed most recently: late traps, the late cheats, boss-level runs, and real late-game mixes
+    for (const diff of diffs) for (const tw of twists) {
+      for (const lv of [58, 68, 78, 88]) jobs.push({ seed: 'TRAP' + lv, level: lv, cheats: [], diff, twist: tw });
+      for (const id of ['peekaboo', 'lagZone']) for (const lv of [92, 98]) jobs.push({ seed: 'LATE' + lv, level: lv, cheats: [id], diff, twist: tw });
+    }
+    for (const diff of diffs) for (const seed of ['4GZA7', 'K9Q2X', 'MOLE5']) {
+      const sheet = {}, prof = SL.Profile.blank(); let last = [];
+      for (let lv = 2; lv <= 100; lv++) {
+        const pick = SL.Profile.choose(lv, sheet, prof, last, seed, diff);
+        if (pick.intro) sheet[pick.intro] = { met: true }; last = pick.cheats;
+        if (SL.isBossLevel(lv) || (lv >= 57 && lv % 7 === 0)) jobs.push({ seed, level: lv, cheats: pick.cheats, diff, ng: lv % 2 ? 0 : 1 });
+      }
+    }
+  } else if (mode === 'early') {
+    // levels 2-56 as a real run would build them: camps, length budget, every mode
+    for (const diff of diffs) for (const seed of ['4GZA7', 'K9Q2X', 'MOLE5']) {
+      const sheet = {}, prof = SL.Profile.blank(); let last = [];
+      for (let lv = 2; lv <= 56; lv++) {
+        const pick = SL.Profile.choose(lv, sheet, prof, last, seed, diff);
+        if (pick.intro) sheet[pick.intro] = { met: true }; last = pick.cheats;
+        if (lv % 3 === 0 && !SL.isBossLevel(lv)) jobs.push({ seed, level: lv, cheats: pick.cheats, diff, twist: lv % 9 === 0 ? 'ice' : undefined });
+      }
+    }
+  } else if (mode === 'boss') {
+    for (const diff of diffs) for (const lv of [25, 50, 75, 100]) for (const seed of ['BOSS1', 'BOSS2']) jobs.push({ seed, level: lv, cheats: [], diff, boss: true });
   } else if (mode === 'retry' || mode === 'fine') {
     jobs.push(...JSON.parse(fs.readFileSync(path.join(__dirname, 'solve-fails.json'), 'utf8')).map(j => mode === 'fine' ? Object.assign(j, { opts: Object.assign({}, j.opts, { fine: true }) }) : j));
   } else {
@@ -151,7 +245,7 @@ if (!isMainThread) {
       }
     }
   }
-  const filt = ['quick', 'full'].includes(mode) && process.argv[3];
+  const filt = ['quick', 'full', 'new', 'boss', 'early'].includes(mode) && process.argv[3];
   const todo = filt ? jobs.filter(j => JSON.stringify(j).includes(filt)) : jobs;
   console.log(`${todo.length} levels to solve`);
   const N = Math.min(11, todo.length), fails = [];
@@ -162,6 +256,7 @@ if (!isMainThread) {
     const feed = () => { if (next < todo.length) wk.postMessage(todo[next++]); else wk.postMessage('done'); };
     wk.on('message', m => {
       done++; slow = Math.max(slow, m.ms);
+      if (m.job.boss) console.log(`${m.res.ok ? 'BEATEN' : 'NOT BEATEN'} level ${m.job.level} ${m.job.diff} ${m.job.seed}: ${m.res.t.toFixed(0)}s of fight, hits at ${m.res.log.join(',')}s${m.res.ok ? '' : ' stuck at hp ' + m.res.hp + ' phase ' + m.res.phase + (m.res.timeout ? ' (timeout)' : '') + ' last deaths ' + JSON.stringify(m.res.lastDeaths) + ' plug ' + JSON.stringify(m.res.plug)} deaths pruned ${JSON.stringify(m.res.deathCauses)}`);
       if (!m.res.ok) { fails.push(m); console.log(`\nUNSOLVED ${JSON.stringify(m.job)} twist=${m.twist} w=${m.w} reached col ${Math.floor((m.res.best || 0) / 32)} deaths=${JSON.stringify(m.res.deathCauses)} ${m.res.err || ''}${m.res.timeout ? ' TIMEOUT' : ''}\n${m.res.map || ''}`); }
       if (done % 50 === 0) console.log(`  ${done}/${todo.length} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
       feed();

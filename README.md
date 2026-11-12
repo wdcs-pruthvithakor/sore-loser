@@ -23,9 +23,17 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
 - **Level generator** (`js/core.js`): builds each level left to right from segments that stay inside the
   player's jump range, then a validator checks there is a route to every spot the exit can flee to.
   Level `n` of a run is always the same for the same seed.
-- **Cheats** (18): Cold Feet, False Floor, Rotten Platforms, Pinholes, Mimic, Invisible Block, Shouting Signs,
+- **Cheats** (20): Cold Feet, False Floor, Rotten Platforms, Pinholes, Mimic, Invisible Block, Shouting Signs,
   Ceiling Teeth, Runaway Floor, Headache Block, Lunging Spike, Shy Ledge, Secret Floor, Wrong Way, Impatient Floor,
-  Backwards Flag, Copycat, Spike Wall. Rules are in `SL.CHEATS`.
+  Backwards Flag, Copycat, Spike Wall, and two late ones with a `minLevel`: Peekaboo (90: a ghost that only moves
+  while your back is turned) and Lag Spike (95: static zones where every key arrives 0.25 s late). Rules are in `SL.CHEATS`.
+- **Late traps** (`SL.TRAPS`, every mode, unlocked by level, from level 5 on New Game+): laser gates (55), conveyor
+  belts (65), swinging blades (75). The newest one always appears; older ones join the filler pool. Each gets an
+  introduction the first time you meet it.
+- **Length and checkpoint camps**: levels keep growing all the way to 99 (about 90 tiles early, 160+ late). They are cut
+  into sections by camps: a flat stone pad with a lantern and a "CAMP 1/2" plaque, placed at even steps and always
+  right after a short challenge. One camp early, two from about level 40, three in the 90s. A progress bar along
+  the bottom shows how far you are and where the camps are.
 - **Difficulty modes** (`SL.DIFFS`, one separate run per mode; switching never loses progress): Normal (tells fade as levels rise), Hard (faint tells, +1 cheat, layouts one
   tier meaner), Rage (no tells at all, +2 cheats, layouts two tiers meaner, signs drop their punctuation).
 - **Worlds** (`SL.THEMES` in `js/render.js`): fifteen worlds, five per mode and never shared.
@@ -57,7 +65,13 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
   that multiply payouts.
 - **Cheat mastery**: Bronze/Silver/Gold at 5/25/75 clears with a cheat; Gold unlocks that cheat's pin.
 - **Loser Rank**: lifetime XP (deaths count) with titles and coin rewards; never maxes out.
-- **Level 100 and New Game+**: level 100 is a boss fight against the Game (pull its three plugs). Beating it unlocks
+- **Boss levels** (`SL.BOSSES`): levels 25, 50, 75 and 100 are a shorter run, a camp at the boss door, then an arena.
+  The boss has a health bar in phases; plugs come out one at a time and each pull is a hit. Phases add attacks:
+  tooth volleys and floor saws, then fists that slam where you stand, then floor strips that take turns growing
+  spikes, then blackouts. Health: 6 / 9 / 12 / 16. You get 3 lives once the fight starts; lose a life and you
+  restart at the door with the boss's damage kept, lose all three and the boss heals fully. Chasers and the
+  fleeing exit (`SL.BOSS_BAN`) never appear on boss levels.
+- **Level 100 and New Game+**: level 100 is the final fight against the Game. Beating it unlocks
   NG+, which restarts at level 1 with +1 cheat, meaner layouts, bigger pay, and remixed rules (NG+1: Cold Feet and
   Shouting Signs flip; NG+2: Mimic and Backwards Flag flip). It repeats forever.
 - **Audio** (`js/audio.js`): every sound and all music is synthesized live with WebAudio. No recorded audio.
@@ -94,6 +108,7 @@ Builds hundreds of levels across seeds and tiers, validates routes and runs a ra
 
 ```
 node tools/solve.js quick|full        # sweep: every trick under every twist in every mode, plus real mixes
+node tools/solve.js boss              # fight every boss in every mode, plug by plug, without losing a life
 node tools/solve.js quick headache    # only jobs whose description contains "headache"
 node tools/solve.js retry|fine        # rerun tools/solve-fails.json (fine = 0.05s timing)
 node tools/solve.js one '{"seed":"4GZA7","level":55,"cheats":[],"diff":"normal","twist":"floaty"}'

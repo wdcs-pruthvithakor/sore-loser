@@ -8,10 +8,12 @@ const T = 32, H = 15;
 SL.TILE = T; SL.ROWS = H; SL.VIEW_W = 864; SL.VIEW_H = H * T;
 
 // Tile codes.
-const E = 0, GROUND = 1, SPIKE = 2, FALSE = 3, BRIDGE = 4, HOLE = 5, CRACK = 6, PAPER = 7, SEAM = 8, SWIRL = 9, SPIKED = 10, INVIS = 11, CRUMBLE = 12;
-SL.TC = { E, GROUND, SPIKE, FALSE, BRIDGE, HOLE, CRACK, PAPER, SEAM, SWIRL, SPIKED, INVIS, CRUMBLE };
-SL.isSolid = c => c === GROUND || c === BRIDGE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL || c === CRUMBLE;
-SL.looksSolid = c => c === GROUND || c === FALSE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL || c === CRUMBLE;
+// BELT_L / BELT_R are conveyor floors that carry you left or right while you stand on them.
+const E = 0, GROUND = 1, SPIKE = 2, FALSE = 3, BRIDGE = 4, HOLE = 5, CRACK = 6, PAPER = 7, SEAM = 8, SWIRL = 9, SPIKED = 10, INVIS = 11, CRUMBLE = 12, BELT_L = 13, BELT_R = 14;
+SL.TC = { E, GROUND, SPIKE, FALSE, BRIDGE, HOLE, CRACK, PAPER, SEAM, SWIRL, SPIKED, INVIS, CRUMBLE, BELT_L, BELT_R };
+SL.isSolid = c => c === GROUND || c === BRIDGE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL || c === CRUMBLE || c === BELT_L || c === BELT_R;
+SL.looksSolid = c => c === GROUND || c === FALSE || c === HOLE || c === CRACK || c === SEAM || c === SWIRL || c === CRUMBLE || c === BELT_L || c === BELT_R;
+SL.BELT_SPEED = 110;
 
 // ---------- RNG ----------
 function hashStr(s) {
@@ -51,6 +53,25 @@ SL.DIFFS = {
   rage: { name: 'Rage', bump: 2, extra: 2, blurb: 'No tells at all. Traps look like everything else. Memorise or die.' }
 };
 SL.tierOf = lv => lv <= 5 ? 0 : lv <= 15 ? 1 : lv <= 30 ? 2 : lv <= 50 ? 3 : 4;
+// Boss levels: every 25th level is a run that ends in an arena fight. Level 100 is the final one.
+// Each phase adds an attack (1 teeth + saws, 2 fists, 3 rising floor, 4 blackouts); hp is plugs per phase.
+SL.BOSSES = {
+  25: { phases: 2, perPhase: 3, speed: 1, name: 'The Game (Preview Build)' },
+  50: { phases: 3, perPhase: 3, speed: 1.05, name: 'The Game (Beta)' },
+  75: { phases: 4, perPhase: 3, speed: 1.1, name: 'The Game (Release Candidate)' },
+  100: { phases: 4, perPhase: 4, speed: 1.18, name: 'The Game', final: true }
+};
+SL.BOSS_LIVES = 3;
+SL.isBossLevel = lv => !!SL.BOSSES[lv];
+// Chasers and the fleeing exit make no sense in an arena.
+SL.BOSS_BAN = ['coldFeet', 'spikeWall', 'copycat', 'peekaboo'];
+// New traps arrive late in a run (and from level 5 on New Game+), so there is always something new.
+SL.TRAPS = {
+  lasers: { level: 55, name: 'Laser Gates', say: 'New toy: laser gates. They blink. You do not.' },
+  belts: { level: 65, name: 'Conveyor Belts', say: 'Conveyor belts. The floor walks for you now. Badly.' },
+  blades: { level: 75, name: 'Swinging Blades', say: 'I hung some blades. They swing on a beat. Learn it.' }
+};
+SL.trapsFor = (level, ng) => Object.keys(SL.TRAPS).filter(k => (ng ? level + 50 : level) >= SL.TRAPS[k].level && level > 1);
 SL.cheatCount = (lv, r, diff) => {
   const t = SL.tierOf(lv);
   const extra = (SL.DIFFS[diff] || SL.DIFFS.normal).extra;
@@ -58,7 +79,7 @@ SL.cheatCount = (lv, r, diff) => {
   return extra + (t === 0 ? 2 : t === 1 ? (r.chance(0.5) ? 3 : 2) : t === 2 ? 3 : t === 3 ? (r.chance(0.5) ? 4 : 3) : (r.chance(0.5) ? 5 : 4));
 };
 // Pairs that would make a level unfair together.
-SL.CLASH = { copycat: ['backwardsFlag'], backwardsFlag: ['copycat', 'spikeWall'], spikeWall: ['backwardsFlag'] };
+SL.CLASH = { copycat: ['backwardsFlag', 'peekaboo'], backwardsFlag: ['copycat', 'spikeWall'], spikeWall: ['backwardsFlag', 'peekaboo'], peekaboo: ['copycat', 'spikeWall'] };
 SL.MOODS = ['sweet', 'smug', 'rattled', 'unhinged', 'broken'];
 
 // Level twists: one per level from level 6, so later levels never feel the same.
@@ -181,11 +202,26 @@ SL.CHEATS = {
     symptom: 'A wall of spikes chased you down.',
     rule: 'Once you leave the start, a wall of spikes follows at about half your speed. Any long pause and it catches you.',
     crack: 'Finish a level with the wall on screen.'
+  },
+  // The late cheats: they only show up from their level on, so the deep end always has something new.
+  peekaboo: {
+    name: 'Peekaboo',
+    minLevel: 90,
+    symptom: 'Something grabbed you from behind.',
+    rule: 'Once you leave the start, a ghost drifts after you, but only while your back is turned. Face it and it freezes. On Rage you only see it while you look at it.',
+    crack: 'Freeze the ghost up close, then finish the level.'
+  },
+  lagZone: {
+    name: 'Lag Spike',
+    minLevel: 95,
+    symptom: 'You pressed jump. You jumped late.',
+    rule: 'Inside the static, every key arrives a quarter-second late. Press early, about two tiles before you mean it. On Rage the static is invisible.',
+    crack: 'After lag gets you, clear a gap from inside the static.'
   }
 };
 SL.CHEAT_IDS = Object.keys(SL.CHEATS);
 SL.INTRO_ORDER = ['coldFeet', 'falseFloor', 'rotten', 'pinholes', 'mimic', 'invisBlock', 'shouting', 'ceilingTeeth', 'runaway', 'headache',
-  'lunger', 'shyLedge', 'secretFloor', 'swapZone', 'impatient', 'backwardsFlag', 'copycat', 'spikeWall'];
+  'lunger', 'shyLedge', 'secretFloor', 'swapZone', 'impatient', 'backwardsFlag', 'copycat', 'spikeWall', 'peekaboo', 'lagZone'];
 
 // ---------- sign text (all signs obey the Shouting Signs rule) ----------
 const NUM = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'];
@@ -212,8 +248,8 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   const g = new Uint8Array(MAXW * H);
   const L = {
     level, seed, diff, tier: SL.tierOf(level), gt: tier, cheats: cheats.slice(), plats: [], signs: [], forks: [], saws: [], mimics: [],
-    tunnels: [], lungers: [], invis: [], coins: [], crushers: [], waves: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [], hops: 0, start: null, twist: null,
-    ng, remix: SL.remixFor(ng)
+    tunnels: [], lungers: [], invis: [], coins: [], crushers: [], waves: [], carpets: [], bridges: [], gotchas: [], checkpoints: [], doorSpots: [], hops: 0, start: null, twist: null,
+    lasers: [], blades: [], lags: [], trapKinds: [], ng, remix: SL.remixFor(ng)
   };
   const get = (c, row) => (c >= 0 && c < MAXW && row >= 0 && row < H) ? g[row * MAXW + c] : E;
   const set = (c, row, v) => { if (c >= 0 && c < MAXW && row >= 0 && row < H) g[row * MAXW + c] = v; };
@@ -381,7 +417,69 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     flat(2);
   };
 
+  // ----- late traps: every mode, unlocked by level (SL.TRAPS) -----
+  const trapOn = k => { if (L.trapKinds.indexOf(k) < 0) L.trapKinds.push(k); };
+  // Laser gates: a beam from a ceiling emitter to the floor, too tall to jump, blinking on a shared beat.
+  const segLasers = () => {
+    trapOn('lasers');
+    flat(2);
+    const n = r.int(2, tier >= 3 ? 3 : 2), gap = 3, x0 = x, len = n * gap + 1;
+    flat(len);
+    const period = [2.6, 2.5, 2.4, 2.3, 2.2][tier];
+    for (let i = 0; i < n; i++) {
+      const c = x0 + 1 + i * gap;
+      for (let row = Math.max(0, h - 7); row <= h - 5; row++) set(c, row, GROUND);
+      L.lasers.push({ x: c * T + T / 2, top: (h - 4) * T, bottom: h * T, period, on: 0.9, phase: i * 0.45 + r() * 0.15 });
+    }
+    coin((x0 + len / 2) * T, (h - 1.5) * T, 0.5);
+    for (let c = x0 - 1; c <= x0 + len; c++) protect.add(c);
+    flat(2);
+  };
+  // Conveyor belts: one carries you on into spikes, the next drags you back toward them.
+  const segBelts = () => {
+    trapOn('belts');
+    flat(2);
+    const x0 = x, a = r.int(4, 6), sp = r.int(2, 3), b = r.int(4, 5);
+    for (let i = 0; i < a; i++) col(x + i, h, BELT_R);
+    x += a;
+    coin((x + sp / 2) * T, (h - 3) * T, 0.5);
+    for (let i = 0; i < sp; i++) { col(x + i, h); set(x + i, h - 1, SPIKE); }
+    x += sp;
+    for (let i = 0; i < b; i++) col(x + i, h, BELT_L);
+    x += b;
+    pit(r.int(2, Math.min(3, maxGap)));
+    for (let c = x0 - 1; c <= x; c++) protect.add(c);
+    flat(2);
+  };
+  // Swinging blades: a blade on a chain sweeps low across the walkway on a steady beat.
+  const segBlades = () => {
+    trapOn('blades');
+    flat(2);
+    const k = r.int(1, tier >= 3 ? 2 : 1) + (level >= 85 ? 1 : 0), x0 = x, len = k * 7 + 2;
+    flat(len);
+    const period = r.pick([2.2, 2.4, 2.6]);
+    for (let i = 0; i < k; i++) {
+      const c = x0 + 4 + i * 7;
+      for (let row = Math.max(0, h - 8); row <= h - 7; row++) set(c, row, GROUND);
+      L.blades.push({ ax: c * T + T / 2, ay: (h - 6) * T, len: 5.3 * T, amp: 0.9, omega: Math.PI * 2 / period, phase: i * Math.PI + r() * 0.6 });
+    }
+    for (let c = x0 - 1; c <= x0 + len; c++) protect.add(c);
+    flat(2);
+  };
+  const TRAP_SEG = { lasers: segLasers, belts: segBelts, blades: segBlades };
+
   // ----- cheat segments -----
+  // Lag Spike: a stretch of static over a run of gaps. Every key arrives late inside it.
+  const segLag = () => {
+    flat(2);
+    const x0 = x;
+    flat(2);
+    const k = r.int(2, tier >= 2 ? 3 : 2);
+    for (let i = 0; i < k; i++) { pit(r.int(2, Math.min(3, maxGap))); h = clampH(h + r.int(-1, 0)); flat(r.int(3, 4)); }
+    L.lags.push({ x0: x0 * T, x1: x * T });
+    for (let c = x0 - 1; c <= x; c++) protect.add(c);
+    flat(2);
+  };
   const segFalse = () => {
     flat(2);
     const n = r.int(2, Math.min(maxGap, 4));
@@ -449,7 +547,14 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     x = m0 + M;
     flat(2);
   };
-  const segCheckpoint = () => { flat(2); L.checkpoint = { x: (x + 1) * T + T / 2, y: h * T }; for (let c = x - 2; c < x + 4; c++) protect.add(c); flat(4); };
+  // A checkpoint is a camp: a flat stone pad with a lantern, placed right after a challenge at an even step
+  // through the level. n of `of` drives the little banner; an honest one (the boss door) ignores Backwards Flag.
+  const segCheckpoint = (n, of, honest) => {
+    flat(2);
+    L.checkpoints.push({ x: (x + 2) * T + T / 2, y: h * T, n, of, honest: !!honest });
+    for (let c = x - 2; c < x + 7; c++) protect.add(c);
+    flat(6);
+  };
   // A door in the middle of the level. Its handle is on the wrong side.
   const segMimic = () => {
     flat(3);
@@ -537,11 +642,16 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     const p = rage ? 0.7 : [0, 0.4, 0.55, 0.65, 0.75][SL.tierOf(level)];
     if (r.chance(p)) L.twist = r.pick(pool);
   }
+  const boss = SL.BOSSES[level] || null;
+  if (boss) L.twist = null; // the arena is hard enough with the lights on
   if (opts.twist !== undefined) L.twist = opts.twist; // test harness only
 
   // ----- body -----
-  // Short and dense: more cheats means fewer filler segments, not a longer level.
-  const targetW = level === 1 ? 46 : 54 + Math.round(Math.min(level, 40) * 0.6);
+  // Levels keep growing the whole way to 99. Longer ones are cut into sections by checkpoint camps,
+  // so each stretch stays a bite-sized challenge. A boss level is a shorter run that ends in the arena.
+  const baseW = level === 1 ? 46 : 54 + Math.round(Math.min(level, 40) * 0.6) + Math.round(Math.max(0, level - 40) * 0.45);
+  const targetW = boss ? Math.round(baseW * 0.7) : baseW;
+  const sections = level === 1 ? 1 : boss ? 2 : baseW < 75 ? 2 : baseW < 98 ? 3 : 4;
   const queue = [];
   const twice = cheats.length <= 2;
   const add = (fn, n) => { for (let i = 0; i < n; i++) queue.push(fn); };
@@ -557,23 +667,36 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   if (has('runaway')) add(segRunaway, twice ? 2 : 1);
   if (has('swapZone')) add(segSwirl, 1);
   if (has('lunger')) add(segLunge, twice ? 2 : 1);
+  if (has('lagZone')) add(segLag, twice ? 2 : 1);
+  // the newest trap you have unlocked always shows up; older ones join the filler pool
+  const traps = SL.trapsFor(level, ng);
+  if (traps.length) add(TRAP_SEG[traps[traps.length - 1]], 1);
   r.shuffle(queue);
   const fillers = level === 1 ? [segGap, segStep, segSpikes, segPillars, segCeil, segSaw] :
     tier === 0 ? [segGap, segStep, segSpikes, segPlats, segPillars, segCeil, segSaw, segStairs] :
     [segGap, segSpikes, segPlats, segPillars, segMover, segCeil, segSaw, segSaw, segStairs, segCorridor];
   if (level > 1 && evil >= 1) fillers.push(segCrusher, segGauntlet);
   if (level > 1 && evil >= 2) fillers.push(segWaves, segCrumble, segCrusher);
+  for (const k of traps) fillers.push(TRAP_SEG[k]);
+  const hardFill = [segGap, segSaw, segSpikes].concat(traps.map(k => TRAP_SEG[k]));
   // never the same filler twice in a row
   let lastFill = null;
   const filler = () => { let f; do { f = r.pick(fillers); } while (f === lastFill && fillers.length > 1); lastFill = f; f(); };
-  let midPlaced = level === 1;
+  // Camps sit at even steps through the level, and each one is earned: a short challenge comes first.
+  // The plan: cheat segments and camps take about 16 tiles each; fillers top the level up to its target length.
+  let nextCp = 1;
+  const cost = () => x + (queue.length + sections - nextCp) * 16;
+  const planned = Math.max(targetW, cost());
+  const campDue = () => nextCp < sections && x > bodyStart + (planned - bodyStart) * nextCp / sections - 3;
+  const camp = () => { r.pick(hardFill)(); segCheckpoint(nextCp, sections - 1 + (boss ? 1 : 0)); nextCp++; };
   while (queue.length || x < targetW) {
-    const nf = x >= targetW ? 1 : r.int(1, 2);
-    for (let i = 0; i < nf; i++) filler();
-    if (!midPlaced && x > targetW / 2) { segCheckpoint(); midPlaced = true; }
+    const nf = cost() >= targetW ? (queue.length ? 0 : 1) : r.int(1, 2);
+    for (let i = 0; i < nf && !campDue(); i++) filler();
+    if (campDue()) camp();
     if (queue.length) queue.shift()();
+    if (campDue()) camp();
   }
-  if (!midPlaced) segCheckpoint();
+  while (nextCp < sections) camp();
   const bodyEnd = x;
 
   // ----- sprinkles: traps hidden in ordinary floor -----
@@ -625,6 +748,8 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
     }
   }
 
+  if (boss) { buildArena(); finish(); return L; }
+
   // ----- end zone: the exit and the pillars it can flee to -----
   flat(5);
   L.doorSpots.push({ x: (x - 2) * T + T / 2, y: h * T });
@@ -639,18 +764,47 @@ function buildOnce(runSeed, level, cheats, salt, diff, opts) {
   L.doorSpots.push({ x: (x - 3) * T + T / 2, y: h * T });
   col(x, 0); col(x + 1, 0); x += 2;
   L.hops = has('coldFeet') ? Math.min(L.doorSpots.length - 1, 2 + Math.floor(tier / 2)) : 0;
-
-  // remixed signs: every other sign swaps its ending, so "!" is now the honest one
-  if (L.remix.shouting) for (const sg of L.signs) if (sg.fork === undefined) sg.text = sg.text.replace(/!$/, '\u0000').replace(/\.\.\.$/, '!').replace(/\u0000$/, '...');
-  // pacts
-  if (opts.pacts && opts.pacts.noflag) L.checkpoint = null;
-  if (opts.pacts && opts.pacts.dark) L.twist = 'dark';
-
-  // compact
-  L.w = x;
-  L.tiles = new Uint8Array(L.w * H);
-  for (let row = 0; row < H; row++) for (let c = 0; c < L.w; c++) L.tiles[row * L.w + c] = g[row * MAXW + c];
+  finish();
   return L;
+
+  // ----- the boss arena: a camp at the door, then a walled room with pillars, ledges and plug spots -----
+  function buildArena() {
+    while (h !== 11) { h += h < 11 ? 1 : -1; flat(2); }
+    segCheckpoint(sections, sections, true);
+    sign(x - 3, level === 100 ? 'the Game is through here...' : 'something big is through here...');
+    const a0 = x, AW = 46;
+    for (let c = a0; c < a0 + AW; c++) col(c, 11);
+    col(a0 + AW, 0); col(a0 + AW + 1, 0);
+    const pillars = [[6, 9], [14, 8], [23, 8], [32, 8], [40, 9]];
+    for (const [dc, top] of pillars) { col(a0 + dc, top); col(a0 + dc + 1, top); }
+    const ledges = [[10, 6], [26, 6], [36, 6]];
+    for (const [dc, row] of ledges) L.plats.push({ x: (a0 + dc) * T, y: row * T, w: 2 * T, kind: 'static' });
+    // plugs come out one at a time, from these spots
+    L.plugSpots = [[3, 11], [7, 9], [11, 6], [15, 8], [19, 11], [24, 8], [27, 6], [33, 8], [37, 6], [41, 9], [AW - 3, 11]]
+      .map(([dc, row]) => ({ x: (a0 + dc) * T, y: row * T }));
+    // phase 3: the floor between the pillars takes turns growing spikes
+    const strips = [[1, 6], [8, 14], [16, 23], [25, 32], [34, 40], [42, AW]];
+    strips.forEach(([c0, c1], i) => L.waves.push({ c0: a0 + c0, c1: a0 + c1, row: 10, up: 1.0, down: 1.5, phase: (i % 2) * 1.25, bossPhase: 3 }));
+    L.arena = { x0: a0 * T, x1: (a0 + AW) * T, floor: 11 * T };
+    L.boss = Object.assign({ x: (a0 + AW / 2) * T, y: 2.6 * T, level }, boss);
+    // for the validator: the arena and every plug spot must be reachable
+    L.doorSpots = [{ x: (a0 + 3) * T + T / 2, y: 11 * T }].concat(L.plugSpots.map(sp => ({ x: sp.x + 4, y: sp.y })));
+    L.hops = 0;
+    x = a0 + AW + 2;
+  }
+  // signs, pacts and packing the tiles, shared by normal and boss levels
+  function finish() {
+    // remixed signs: every other sign swaps its ending, so "!" is now the honest one
+    if (L.remix.shouting) for (const sg of L.signs) if (sg.fork === undefined) sg.text = sg.text.replace(/!$/, '\u0000').replace(/\.\.\.$/, '!').replace(/\u0000$/, '...');
+    // pacts (No Safety Net keeps only the boss door camp)
+    if (opts.pacts && opts.pacts.noflag) L.checkpoints = L.checkpoints.filter(cp => cp.honest);
+    if (opts.pacts && opts.pacts.dark) L.twist = 'dark';
+
+    // compact
+    L.w = x;
+    L.tiles = new Uint8Array(L.w * H);
+    for (let row = 0; row < H; row++) for (let c = 0; c < L.w; c++) L.tiles[row * L.w + c] = g[row * MAXW + c];
+  }
 }
 
 // ---------- validator ----------
@@ -710,28 +864,7 @@ SL.REMIX_RULES = {
   backwardsFlag: 'REMIXED: the checkpoint only saves if you touch it in mid-air.'
 };
 
-// Level 100: the Game itself. Pull its three plugs while it throws teeth and saws at you.
-function buildBoss(runSeed, diff, ng) {
-  const W = 44, g = new Uint8Array(W * H);
-  const set = (c, row, v) => { if (c >= 0 && c < W && row >= 0 && row < H) g[row * W + c] = v; };
-  const col = (c, top) => { for (let row = top; row < H; row++) set(c, row, GROUND); };
-  for (let row = 0; row < H; row++) { set(0, row, GROUND); set(W - 1, row, GROUND); set(W - 2, row, GROUND); }
-  for (let c = 1; c < W - 2; c++) col(c, 11);
-  for (const [c, top] of [[13, 9], [14, 9], [24, 8], [25, 8], [35, 9], [36, 9]]) col(c, top);
-  const L = {
-    level: 100, seed: hashStr(runSeed + ':boss'), diff, tier: 4, gt: 4, cheats: [], plats: [], signs: [], forks: [], saws: [], mimics: [], tunnels: [],
-    lungers: [], invis: [], coins: [], crushers: [], waves: [], carpets: [], bridges: [], gotchas: [], checkpoint: null, doorSpots: [{ x: (W - 4) * T, y: 11 * T }], hops: 0,
-    start: { x: 2.5 * T, y: 11 * T }, twist: null, ng, remix: SL.remixFor(ng), w: W, salt: 0,
-    boss: { x: 24.5 * T, y: 2.6 * T }, arena: { x0: 9 * T, x1: (W - 3) * T, floor: 11 * T },
-    switches: [{ x: 14 * T, y: 9 * T }, { x: 25 * T, y: 8 * T }, { x: 36 * T, y: 9 * T }]
-  };
-  L.signs.push({ x: 4.5 * T, y: 11 * T, text: diff === 'rage' ? 'pull all three plugs' : 'pull all three plugs. please do not...', lie: false });
-  L.tiles = g;
-  return L;
-}
-
 SL.buildLevel = function (runSeed, level, cheats, diff, opts) {
-  if (level === 100) return buildBoss(runSeed, diff, (opts && opts.ng) || 0);
   for (let salt = 0; salt < 80; salt++) {
     const L = buildOnce(runSeed, level, cheats, salt, diff, opts);
     if (SL.validate(L)) { L.salt = salt; return L; }

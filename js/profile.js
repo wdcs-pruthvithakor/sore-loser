@@ -59,7 +59,9 @@ const Profile = SL.Profile = {
     shyLedge: { trait: 'jumpy', k: 2.5, say: () => 'You jump the instant you can. Some ledges are shy about that.' },
     swapZone: { trait: 'stubborn', k: 2.5, say: n => `You die ${n.dpl.toFixed(1)} times a level. Let us see you do it backwards.` },
     impatient: { trait: 'caution', k: 3.0, say: n => `You stand still ${n.idlePct}% of the time. The floor is done waiting.` },
-    copycat: { trait: 'stubborn', k: 2.0, say: () => 'You keep retrying the same way. Now your shadow does too.' }
+    copycat: { trait: 'stubborn', k: 2.0, say: () => 'You keep retrying the same way. Now your shadow does too.' },
+    peekaboo: { trait: 'caution', k: 2.5, say: () => 'You never look back. Something noticed.' },
+    lagZone: { trait: 'jumpy', k: 2.5, say: n => `You jump ${n.jps.toFixed(1)} times a second. Let us see you do it late.` }
   },
 
   // The Cheat Director: picks this level's cheats. New cheats are introduced one per level,
@@ -70,13 +72,19 @@ const Profile = SL.Profile = {
     const count = SL.cheatCount(level, r, diff);
     const picks = [];
     let intro = null;
-    const fresh = SL.INTRO_ORDER.filter(id => !(sheet[id] && sheet[id].met));
-    if (fresh.length) { intro = fresh[0]; picks.push(intro); }
+    // late cheats wait for their level; once met, they can turn up a little earlier (New Game+)
+    const met = id => !!(sheet[id] && sheet[id].met);
+    const minLv = id => SL.CHEATS[id].minLevel || 0;
+    const banned = id => SL.isBossLevel(level) && SL.BOSS_BAN.indexOf(id) >= 0;
+    const fresh = SL.INTRO_ORDER.filter(id => !met(id));
+    const due = fresh.filter(id => level >= minLv(id) && !banned(id));
+    if (due.length && due[0] === fresh.filter(id => level >= minLv(id))[0]) { intro = due[0]; picks.push(intro); }
     const tr = Profile.traits(p);
     const weights = {};
     for (const id of SL.CHEAT_IDS) {
       if (picks.indexOf(id) >= 0) continue;
       if (fresh.indexOf(id) >= 0) continue; // unseen cheats wait for their intro
+      if (banned(id) || level < minLv(id) - 50) continue;
       if (picks.some(q => (SL.CLASH[q] || []).indexOf(id) >= 0)) continue;
       const d = Profile.DRIVERS[id];
       let w = 1 + Math.max(0, tr[d.trait] - 0.25) * d.k;

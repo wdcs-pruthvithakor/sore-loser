@@ -82,7 +82,7 @@ const PIN_ART = {
   mimic: ['#ff4f6e', 'W'], invisBlock: ['#ffffff', '?'], shouting: ['#ffcb3d', '!'], ceilingTeeth: ['#eef2fb', 'V'],
   runaway: ['#e2a96f', '»'], headache: ['#a49dba', '✱'], lunger: ['#ff7aa8', '▲'], shyLedge: ['#ff9cc0', '◔'],
   secretFloor: ['#8ed0ff', '✦'], swapZone: ['#c9a7ff', '⇄'], impatient: ['#ff9c6b', '⧗'], backwardsFlag: ['#6fdc98', '⚑'],
-  copycat: ['#2a1d38', '◐'], spikeWall: ['#4a1735', '║']
+  copycat: ['#2a1d38', '◐'], spikeWall: ['#4a1735', '║'], peekaboo: ['#f4f1ff', '◉'], lagZone: ['#c9a7ff', '⧖']
 };
 SL.PIN_ART = PIN_ART;
 for (const id of Object.keys(PIN_ART)) SL.ITEMS.push({ id: 'pin_' + id, slot: 'pin', name: 'Gold Pin', mastery: id });
@@ -126,7 +126,7 @@ SL.todayStock = function (key) {
 // Opt-in punishment for a bigger payout. Each adds to the coin multiplier.
 SL.PACTS = [
   { id: 'extra', name: 'One More Trick', desc: '+1 cheat every level.', mult: 0.5 },
-  { id: 'noflag', name: 'No Safety Net', desc: 'No checkpoints.', mult: 0.5 },
+  { id: 'noflag', name: 'No Safety Net', desc: 'No checkpoint camps (the boss door still counts).', mult: 0.5 },
   { id: 'shadow', name: 'Shadowed', desc: 'Copycat is always on.', mult: 0.5 },
   { id: 'wall', name: 'Chased', desc: 'Spike Wall is always on.', mult: 0.5 },
   { id: 'dark', name: 'Blackout', desc: 'Every level has the lights out.', mult: 0.5 },
@@ -159,7 +159,7 @@ SL.TROLL_ITEMS = [
 SL.DIFF_MULT = { normal: 1, hard: 1.5, rage: 2.5 };
 SL.payout = function (level, deaths, coins, diff, twist, extra) {
   extra = extra || {};
-  const rows = [[extra.boss ? 'Beat the Game' : 'Level cleared', extra.boss ? 500 : 8 + Math.min(level, 60)]];
+  const rows = [[extra.boss === 100 ? 'Beat the Game' : extra.boss ? `Boss down (level ${extra.boss})` : 'Level cleared', extra.boss === 100 ? 500 : extra.boss ? 100 + extra.boss * 2 : 8 + Math.min(level, 60)]];
   if (coins) rows.push([`${coins} coin${coins > 1 ? 's' : ''} grabbed`, coins * 5]);
   if (!deaths && !extra.assisted) rows.push(['No deaths', 15]);
   if (twist) rows.push(['Twist survived', 6]);
@@ -219,7 +219,9 @@ SL.TROPHIES = [
   { id: 'rageMirror', name: 'Through the Looking Glass', desc: 'Clear a Mirror level on Rage.', coins: 150, test: s => !!s.stats2.rageMirror },
   { id: 'bossHard', name: 'Hard Reset', desc: 'Beat the Game on Hard.', coins: 600, test: s => ((s.stats2.bossBy || {}).hard || 0) >= 1 },
   { id: 'bossRage', name: 'Unplugged', desc: 'Beat the Game on Rage.', coins: 1200, test: s => ((s.stats2.bossBy || {}).rage || 0) >= 1 },
-  { id: 'bossClean', name: 'Flawless Victory', desc: 'Beat the Game without dying in the fight.', coins: 500, test: s => !!s.stats2.bossClean },
+  { id: 'bossClean', name: 'Flawless Victory', desc: 'Beat the Game at level 100 without losing a life.', coins: 500, test: s => !!s.stats2.bossClean },
+  { id: 'miniBoss', name: 'Patch Notes', desc: 'Beat a boss at level 25, 50 or 75.', coins: 150, test: s => (s.stats2.miniBoss || 0) >= 1 },
+  { id: 'miniBoss3', name: 'Full Changelog', desc: 'Beat 3 bosses at levels 25, 50 or 75.', coins: 400, test: s => (s.stats2.miniBoss || 0) >= 3 },
   { id: 'ng5', name: 'Sore Winner', desc: 'Beat the Game on New Game+5.', coins: 2000, test: s => (s.stats2.maxNgBeaten || 0) >= 5 },
   { id: 'cleanRun', name: 'No Help Needed', desc: 'Pass level 50 in a run without using a single item.', coins: 300, item: 'saint', test: s => !!s.stats2.cleanRun50 },
   { id: 'deepPacts', name: 'Contract Killer', desc: 'Clear a level 50+ with 4 or more pacts.', coins: 500, test: s => !!s.stats2.deepPacts },

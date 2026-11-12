@@ -38,7 +38,12 @@ SL.VOICE = {
     shyLedge: ['It got shy.', 'The ledge said no.', 'Rejected by furniture.'],
     swapZone: ['Left. No, your other left.', 'Wrong way!', 'Your hands betrayed you.'],
     impatient: ['The floor got bored.', 'You waited. It didn\'t.', 'Standing still is a choice. A bad one.'],
-    copycat: ['You were killed by you.', 'Your shadow says hi.', 'Never look back. Literally.']
+    copycat: ['You were killed by you.', 'Your shadow says hi.', 'Never look back. Literally.'],
+    laser: ['Zapped.', 'It was blinking. You were not.', 'Lasers wait for nobody.'],
+    blade: ['Swing and a hit.', 'It swings on a beat. You did not.', 'Chopped.'],
+    peekaboo: ['Peekaboo!', 'You should have looked back.', 'It was right behind you. The whole time.'],
+    lagZone: ['Lag! Not your fault. Well. A bit.', 'You pressed jump. Eventually.', 'Press early. Earlier than that.'],
+    boss: ['I win. I always win.', 'Back to the door with you.', 'You call that a fight?', 'Again. Do it again.']
   },
   fakeSave: ['Respawning at... oh. The start. Weird!', 'Did that flag say saved? Funny.', 'Checkpoints are more of a suggestion.'],
   trigger: {
@@ -78,7 +83,9 @@ SL.VOICE = {
     shyLedge: 'You faked it out. Ledges have feelings, you know.',
     swapZone: 'You counted the swirls. Of course you did.',
     impatient: 'You stepped off. The floor is very disappointed.',
-    copycat: 'You outran yourself. I do not know how to feel.'
+    copycat: 'You outran yourself. I do not know how to feel.',
+    peekaboo: 'You stared it down. Ghosts have feelings too, you know.',
+    lagZone: 'You jumped before you jumped. That is not how lag works.'
   },
   win: {
     sweet: ['Yay! You did it!', 'Good job! That one was easy, though.', 'Nice! Level {n} done.'],
@@ -93,11 +100,36 @@ SL.VOICE = {
   bought: ['Pleasure doing business. You still lose, though.', 'Looks great. The spikes will love it.', 'Sold! No refunds. Ever.', 'Stylish. Still dying, but stylish.'],
   shopHello: ['Welcome to my shop. Everything is overpriced.', 'Spend your Spite Coins. Then go lose some more.', 'Look nice while you fail. That is the dream.'],
   daily: ['Daily Grudge. Same level for everyone. Everyone dies here today.', 'Today\'s level. Your friends already failed it. Probably.', 'One level. All day. Go on.'],
-  boss: [['So. Level 100. You actually came.', 'angry'], ['I am the Game. These are my plugs. Do NOT touch them.', 'glitch'], ['I will throw everything I have at you.', 'glitch']],
-  unplug1: ['HEY. Put that back.', 'That was load-bearing!', 'Ow. OW.'],
-  unplug2: ['Two? TWO?', 'I can still win this. I always win.', 'Stop pulling things!'],
-  unplug3: ['n o', 'wait wait wait'],
+  // boss levels: the run gets one line, the arena gets its own intro
+  bossRun: {
+    25: 'Level 25. There is something waiting at the end of this one.',
+    50: 'Level 50. I made something new. It is at the end.',
+    75: 'Level 75. Keep going. I am right at the end. Waiting.',
+    100: 'Level 100. You know who is at the end of this one.'
+  },
+  bossIntro: {
+    25: [['Oh. You found my preview build.', 'smug'], ['Pull my plugs if you can. You get three tries.', 'glitch']],
+    50: [['The beta. More fists, fewer mercies.', 'angry'], ['Three lives. Use them badly.', 'glitch']],
+    75: [['Release candidate. I fixed the bugs. You are the bugs.', 'angry'], ['Three lives. I will take all of them.', 'glitch']],
+    100: [['So. Level 100. You actually came.', 'angry'], ['I am the Game. These are my plugs. Do NOT touch them.', 'glitch'], ['Three lives. I will throw everything I have at you.', 'glitch']]
+  },
+  bossAgain: ['Back for more? Three new lives. Same old me.', 'You again. Three lives. Go.', 'Round two. Or ten. I lost count.'],
+  bossHit: ['HEY. Put that back.', 'That was load-bearing!', 'Ow. OW.', 'Stop pulling things!', 'I can still win this. I always win.', 'That one was important!'],
+  bossPhase: {
+    2: ['Fine. FISTS.', 'Now I am using my hands.'],
+    3: ['The floor is mine too.', 'Do not stand still. Anywhere.'],
+    4: ['Lights out. Find me in the dark.', 'I am turning everything off. Including you.']
+  },
+  bossLast: ['n o', 'wait wait wait', 'one more and I— no.'],
+  bossLife: ['One life gone. Hehe.', 'That is a heart. I took it.', 'Careful. You only have so many.'],
+  bossLastLife: ['Last life. No pressure.', 'One heart left. I can hear it.'],
+  bossReset: ['Out of lives! Back to full health. Mine, not yours.', 'All better! Start over. From the door.', 'Wiped. I feel GREAT.'],
   bossDown: 'f i n e',
+  miniBossDown: ['Fine. That was just a preview.', 'That was the beta. It does not count.', 'Release candidate rejected. By you. Rude.'],
+  campSaved: ['Camp {n}. Rest your little legs.', 'Checkpoint. Do not get comfortable.', 'Camp saved. I have more.'],
+  campLast: ['Last camp. It is all downhill from here. Into spikes.', 'Final camp. The exit is close. Probably.'],
+  bossCamp: ['The door camp. You will be seeing it a lot.', 'Saved at my door. How polite.'],
+  peekWake: ['Do not turn around. Actually, do.', 'Something is behind you. It hates being looked at.'],
   ending: ['You beat every trap I had.', 'I cheated, and you learned the cheats. I hate that. I respect it. I hate that I respect it.', 'But here is the thing about a sore loser.', 'It always wants a rematch.'],
   ngStart: ['New Game+{n}. I rewrote some rules. You will not like the new ones.', 'Round {n}+1. I remember everything you did.', 'NG+{n}. Same me. Worse me.'],
   skipped: ['You skipped. That is the saddest thing I have ever seen.', 'A ticket? Really? Fine. Next.'],
