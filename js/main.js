@@ -339,6 +339,8 @@ function makeWorld(level) {
   const L = SL.buildLevel(save.runSeed, level, plan.cheats, save.diff, { ng: save.ng, pacts: save.pacts });
   const w = new SL.World(L, save.history);
   w.greedy = !!save.pacts.greedy;
+  // fixed when the level is built, so switching the pact mid-level changes nothing
+  w.suddenDeath = !!(L.boss && save.pacts.sudden);
   return { world: w, plan };
 }
 
@@ -467,7 +469,8 @@ function handle(e) {
     case 'arena': {
       SL.Audio.music(SL.Audio.trackFor(R.themeId, world.L.diff, world.L.ng || 0, { boss: true }));
       $('stage').classList.add('boss'); document.body.classList.add('boss-fight');
-      if (e.first) for (const [t, m] of SL.VOICE.bossIntro[world.L.level]) say(t, m, { hold: 2.6, prio: 2 });
+      if (e.first && world.suddenDeath) say(SL.say(SL.VOICE.suddenIntro, { n: SL.suddenMult(world.L.boss.phases) }), 'glitch', { hold: 3, prio: 2 });
+      else if (e.first) for (const [t, m] of SL.VOICE.bossIntro[world.L.level]) say(t, m, { hold: 2.6, prio: 2 });
       else say(SL.say(SL.VOICE.bossAgain), 'smug', { hold: 2.2, prio: 2 });
       break;
     }
@@ -479,7 +482,7 @@ function handle(e) {
       if (e.wipe) break;
       say(SL.say(e.lives === 1 ? SL.VOICE.bossLastLife : SL.VOICE.bossLife), 'smug', { prio: 3, hold: 2 });
       break;
-    case 'bossReset': SL.Audio.play('unplug'); say(SL.say(SL.VOICE.bossReset), 'glitch', { prio: 4, hold: 2.6 }); break;
+    case 'bossReset': SL.Audio.play('unplug'); say(SL.say(e.full ? SL.VOICE.suddenReset : SL.VOICE.bossReset, { n: e.phase }), 'glitch', { prio: 4, hold: 2.6 }); break;
     case 'peekWake': SL.Audio.play('seen'); if (!world.saidPeek) { world.saidPeek = true; say(SL.say(SL.VOICE.peekWake), 'smug', { prio: 2 }); } break;
     case 'sign': SL.Audio.play('click'); break;
     case 'down':
@@ -591,7 +594,7 @@ function finishLevel(opts) {
     const prev = save.daily && save.daily.key === dp.key ? save.daily : null;
     save.daily = { key: dp.key, done: true, best: prev && prev.done ? Math.min(prev.best, deaths) : deaths, bestTime: prev && prev.done ? Math.min(prev.bestTime, levelTime) : levelTime, last: deaths, lastTime: levelTime };
   } else {
-    pay = SL.payout(L.level, deaths, grabbed, L.diff, L.twist, { pacts: save.pacts, ng: L.ng, assisted, boss: boss ? L.level : 0 });
+    pay = SL.payout(L.level, deaths, grabbed, L.diff, L.twist, { pacts: save.pacts, ng: L.ng, assisted, boss: boss ? L.level : 0, sudden: world.suddenDeath ? SL.suddenMult(L.boss.phases) : 0 });
   }
   save.coins += pay.total;
   const s2 = save.stats2;
@@ -1086,7 +1089,7 @@ function renderPacts() {
     const on = !!save.pacts[pc.id];
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'pact' + (on ? ' on' : ''); b.setAttribute('aria-pressed', String(on));
-    b.innerHTML = `<span class="tick">${on ? '✓' : ''}</span><div><b></b><span></span></div><em>+${pc.mult}</em>`;
+    b.innerHTML = `<span class="tick">${on ? '✓' : ''}</span><div><b></b><span></span></div><em>${pc.bossOnly ? '×5–40' : '+' + pc.mult}</em>`;
     b.querySelector('b').textContent = pc.name; b.querySelector('div span').textContent = pc.desc;
     b.onclick = () => { save.pacts[pc.id] = !on; if (!save.pacts[pc.id]) delete save.pacts[pc.id]; save.cur = null; persist(); SL.Audio.play(on ? 'click' : 'seen'); renderPacts(); refreshCounts(); };
     $('pact-list').appendChild(b);

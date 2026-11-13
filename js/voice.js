@@ -39,6 +39,7 @@ SL.VOICE = {
     swapZone: ['Left. No, your other left.', 'Wrong way!', 'Your hands betrayed you.'],
     impatient: ['The floor got bored.', 'You waited. It didn\'t.', 'Standing still is a choice. A bad one.'],
     copycat: ['You were killed by you.', 'Your shadow says hi.', 'Never look back. Literally.'],
+    bossShadow: ['Your shadow got you. It learned from the best.', 'Killed by yourself. In MY fight.', 'Do not double back. Ever.'],
     laser: ['Zapped.', 'It was blinking. You were not.', 'Lasers wait for nobody.'],
     blade: ['Swing and a hit.', 'It swings on a beat. You did not.', 'Chopped.'],
     peekaboo: ['Peekaboo!', 'You should have looked back.', 'It was right behind you. The whole time.'],
@@ -118,12 +119,15 @@ SL.VOICE = {
   bossPhase: {
     2: ['Fine. FISTS.', 'Now I am using my hands.'],
     3: ['The floor is mine too.', 'Do not stand still. Anywhere.'],
-    4: ['Lights out. Find me in the dark.', 'I am turning everything off. Including you.']
+    4: ['Lights out. Find me in the dark.', 'I am turning everything off. Including you.'],
+    5: ['Last phase. I made a copy of you. It is better at this.', 'Meet your shadow. Do not walk back into yourself.']
   },
   bossLast: ['n o', 'wait wait wait', 'one more and I— no.'],
   bossLife: ['One life gone. Hehe.', 'That is a heart. I took it.', 'Careful. You only have so many.'],
   bossLastLife: ['Last life. No pressure.', 'One heart left. I can hear it.'],
-  bossReset: ['Out of lives! Back to full health. Mine, not yours.', 'All better! Start over. From the door.', 'Wiped. I feel GREAT.'],
+  bossReset: ['Out of lives! Phase {n} again, from the top.', 'Three fresh lives. Phase {n}. Again.', 'Wiped. Phase {n} all over again. I feel GREAT.'],
+  suddenIntro: ['Sudden Death. One mistake and I heal completely. Pays ×{n}. Good luck.', 'No lives this time. You asked for it. ×{n}.'],
+  suddenReset: ['Sudden Death! Full health. Mine.', 'One mistake. That is all it took. From the top.', 'All better! Every single plug, again.'],
   bossDown: 'f i n e',
   miniBossDown: ['Fine. That was just a preview.', 'That was the beta. It does not count.', 'Release candidate rejected. By you. Rude.'],
   campSaved: ['Camp {n}. Rest your little legs.', 'Checkpoint. Do not get comfortable.', 'Camp saved. I have more.'],

@@ -68,8 +68,11 @@ Upload `dist/sore-loser.zip` as an HTML project and tick "This file will be play
 - **Boss levels** (`SL.BOSSES`): levels 25, 50, 75 and 100 are a shorter run, a camp at the boss door, then an arena.
   The boss has a health bar in phases; plugs come out one at a time and each pull is a hit. Phases add attacks:
   tooth volleys and floor saws, then fists that slam where you stand, then floor strips that take turns growing
-  spikes, then blackouts. Health: 6 / 9 / 12 / 16. You get 3 lives once the fight starts; lose a life and you
-  restart at the door with the boss's damage kept, lose all three and the boss heals fully. Chasers and the
+  spikes, then blackouts, and at level 100 a fifth phase where your own shadow replays your moves 1.6 s late.
+  Health: 6 / 9 / 12 / 15. You get 3 lives once the fight starts; lose a life and you
+  restart at the door with the boss's damage kept, lose all three and the boss heals back to the start of the
+  phase you are in (finished phases stay finished). The Sudden Death pact (bosses only) removes lives and phase
+  saves: any death heals the boss fully, and the boss pays ×5 / ×10 / ×20 / ×40 for 2 / 3 / 4 / 5 phases. Chasers and the
   fleeing exit (`SL.BOSS_BAN`) never appear on boss levels.
 - **Level 100 and New Game+**: level 100 is the final fight against the Game. Beating it unlocks
   NG+, which restarts at level 1 with +1 cheat, meaner layouts, bigger pay, and remixed rules (NG+1: Cold Feet and

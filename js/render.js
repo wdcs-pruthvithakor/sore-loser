@@ -720,6 +720,8 @@ R.drawBoss = function (ctx, w) {
     ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#3b2a40'; ctx.lineWidth = 2; ctx.stroke();
     ctx.restore();
   }
+  // phase 5: your shadow, drawn like the Copycat
+  if (bs.shadow) this.drawGhost(ctx, { ghost: bs.shadow });
   if (glitchy && Math.random() < 0.05) this.glitch = Math.max(this.glitch, 0.08);
 };
 
@@ -737,6 +739,11 @@ R.drawBossBar = function (ctx, w) {
     ctx.fillRect(x0 + i * seg + 1, y - 2, seg - (phaseEnd ? 5 : 2), 10);
   }
   ctx.textAlign = 'left';
+  if (w.suddenDeath) {
+    ctx.font = '700 12px Fredoka, sans-serif'; ctx.fillStyle = '#ff4f6e';
+    ctx.fillText(`SUDDEN DEATH ×${SL.suddenMult(b.phases)}`, x0 + W + 22, y + 6);
+    return;
+  }
   // lives, only once the fight has started
   if (!bs.started && bs.lives === SL.BOSS_LIVES) return;
   for (let i = 0; i < SL.BOSS_LIVES; i++) {

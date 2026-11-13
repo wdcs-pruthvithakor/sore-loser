@@ -103,8 +103,14 @@ W.reset = function () {
   this.spawnSafe = 0.8; // a beat after respawning where moving hazards cannot get you
   const bs = this.bossState;
   if (bs) {
-    if (bs.wipe) { bs.hp = bs.maxHp; bs.phase = 1; bs.lives = SL.BOSS_LIVES; bs.wipe = false; this.emit('bossReset'); }
-    Object.assign(bs, { started: false, plug: null, plugT: 0, toothT: 2, sawT: 3.5, fistT: 2.5, darkT: 4, dark: 0, calm: 0, hurt: 0, saws: [], fists: [] });
+    // Out of lives: back to the start of the phase you are in. Sudden Death: back to full health.
+    if (bs.wipe) {
+      if (bs.wipe === 'full') { bs.hp = bs.maxHp; bs.phase = 1; }
+      else bs.hp = bs.maxHp - (bs.phase - 1) * L.boss.perPhase;
+      this.emit('bossReset', { full: bs.wipe === 'full', phase: bs.phase });
+      bs.lives = SL.BOSS_LIVES; bs.wipe = false;
+    }
+    Object.assign(bs, { started: false, plug: null, plugT: 0, toothT: 2, sawT: 3.5, fistT: 2.5, darkT: 4, dark: 0, calm: 0, hurt: 0, saws: [], fists: [], trail: [], shadow: null, shadowT: 0 });
   }
   this.attempt++;
   this.platMove(0);
@@ -135,7 +141,7 @@ W.platMove = function (dt) {
 W.die = function (cause) {
   const p = this.p;
   if (!p.alive || this.won || this.invuln > 0) return;
-  if (this.spawnSafe > 0 && ['spikeWall', 'crusher', 'saw', 'wave', 'boss', 'copycat', 'lunger', 'ceilingTeeth', 'laser', 'blade', 'peekaboo', 'bossSaw', 'bossFist', 'bossTooth'].indexOf(cause) >= 0) return;
+  if (this.spawnSafe > 0 && ['spikeWall', 'crusher', 'saw', 'wave', 'boss', 'copycat', 'lunger', 'ceilingTeeth', 'laser', 'blade', 'peekaboo', 'bossSaw', 'bossFist', 'bossTooth', 'bossShadow'].indexOf(cause) >= 0) return;
   // inside the static, a fall or a spike is the lag's fault
   if (this.lagNow && (cause === 'pit' || cause === 'spike' || cause === 'ceilSpike')) cause = 'lagZone';
   // Bubble consumable: pops instead of you, and puts you back on the last safe ground
@@ -149,9 +155,10 @@ W.die = function (cause) {
   p.alive = false; p.deadT = 0.45;
   const bs = this.bossState;
   if (bs && bs.started) {
-    bs.lives--; bs.livesLost++;
-    if (bs.lives <= 0) bs.wipe = true;
-    this.emit('bossLife', { lives: Math.max(0, bs.lives), wipe: bs.wipe });
+    bs.livesLost++;
+    if (this.suddenDeath) { bs.wipe = 'full'; }
+    else { bs.lives--; if (bs.lives <= 0) bs.wipe = 'phase'; }
+    this.emit('bossLife', { lives: Math.max(0, bs.lives), wipe: !!bs.wipe, sudden: this.suddenDeath });
   }
   if (this.greedy && this.coinsGot.size) { this.coinsGot = new Set(); this.emit('coinsLost'); }
   if (this.has[cause]) this.markSeen(cause);
@@ -425,10 +432,10 @@ W.hazards = function (dt) {
     else {
       bs.toothT -= dt;
       if (bs.toothT <= 0) {
-        bs.toothT = [1.25, 1.05, 0.95, 0.85][ph - 1] * rate;
+        bs.toothT = [1.25, 1.05, 0.95, 0.85, 0.9][ph - 1] * rate;
         // a volley: one where you are heading, the others either side of it
         const lead = p.x + PW / 2 + p.vx * 0.45;
-        for (const off of [[0], [-56, 0, 56], [-70, 0, 70], [-84, -28, 28, 84]][ph - 1]) {
+        for (const off of [[0], [-56, 0, 56], [-70, 0, 70], [-84, -28, 28, 84], [-84, -28, 28, 84]][ph - 1]) {
           const tx = Math.max(L.arena.x0 + 16, Math.min(L.arena.x1 - 16, lead + off + (roll(bs) - 0.5) * 10));
           this.teeth.push({ x: tx, y: 90, vy: 0, wait: 0.38, boss: true });
         }
@@ -436,7 +443,7 @@ W.hazards = function (dt) {
       }
       bs.sawT -= dt;
       if (bs.sawT <= 0) {
-        bs.sawT = [4.4, 4.0, 3.6, 3.2][ph - 1] * rate;
+        bs.sawT = [4.4, 4.0, 3.6, 3.2, 3.4][ph - 1] * rate;
         const fromLeft = roll(bs) < 0.5;
         // it peeks out of the wall for half a second before it rolls
         bs.saws.push({ x: fromLeft ? L.arena.x0 + 6 : L.arena.x1 - 6, y: L.arena.floor - 13, vx: (fromLeft ? 1 : -1) * (320 + ph * 50), wait: 0.5 });
@@ -445,7 +452,7 @@ W.hazards = function (dt) {
       if (ph >= 2) {
         bs.fistT -= dt;
         if (bs.fistT <= 0) {
-          bs.fistT = [0, 2.6, 2.3, 2.0][ph - 1] * rate;
+          bs.fistT = [0, 2.6, 2.3, 2.0, 2.2][ph - 1] * rate;
           const fx = Math.max(L.arena.x0 + 24, Math.min(L.arena.x1 - 24, p.x + PW / 2 + p.vx * 0.3));
           let land = L.arena.floor;
           for (let r = 3; r < H; r++) if (this.solid(Math.floor(fx / T), r)) { land = r * T; break; }
@@ -474,6 +481,14 @@ W.hazards = function (dt) {
       if (f.t > 0.75 && overlap(pr, { x: f.x - 22, y: y - 34, w: 44, h: 34 })) return this.die('bossFist');
     }
     bs.fists = bs.fists.filter(f => f.t < 1.75);
+    // phase 5: the Game sends your shadow, replaying your moves 1.6 seconds late
+    if (ph >= 5 && bs.calm <= 0) {
+      bs.shadowT = (bs.shadowT || 0) + dt;
+      bs.trail.push({ t: bs.shadowT, x: p.x, y: p.y, face: p.face });
+      while (bs.trail.length > 1 && bs.trail[1].t <= bs.shadowT - 1.6) bs.trail.shift();
+      bs.shadow = bs.trail[0].t <= bs.shadowT - 1.6 ? bs.trail[0] : null;
+      if (bs.shadow && overlap({ x: p.x + 4, y: p.y + 4, w: PW - 8, h: PH - 6 }, { x: bs.shadow.x + 4, y: bs.shadow.y + 4, w: PW - 8, h: PH - 6 })) return this.die('bossShadow');
+    }
   }
 
   // Crumbling bridge (Rage): every tile you touch drops a moment later
@@ -760,7 +775,7 @@ W.bossChecks = function (dt, pr) {
   const up = ph > bs.phase && bs.hp > 0;
   this.emit('unplug', { hp: bs.hp, maxHp: bs.maxHp, phaseUp: up, x: at.x, y: at.y });
   if (up) {
-    bs.phase = ph; bs.calm = 2.2; bs.plugT = 2.4; bs.saws = []; bs.fists = []; this.teeth = [];
+    bs.phase = ph; bs.calm = 2.2; bs.plugT = 2.4; bs.saws = []; bs.fists = []; this.teeth = []; bs.trail = []; bs.shadow = null;
     if (ph >= 3) bs.waveT0 = this.t + 2.2;
     this.emit('bossPhase', { phase: ph });
   }

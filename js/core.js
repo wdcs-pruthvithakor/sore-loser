@@ -54,12 +54,12 @@ SL.DIFFS = {
 };
 SL.tierOf = lv => lv <= 5 ? 0 : lv <= 15 ? 1 : lv <= 30 ? 2 : lv <= 50 ? 3 : 4;
 // Boss levels: every 25th level is a run that ends in an arena fight. Level 100 is the final one.
-// Each phase adds an attack (1 teeth + saws, 2 fists, 3 rising floor, 4 blackouts); hp is plugs per phase.
+// Each phase adds an attack (1 teeth + saws, 2 fists, 3 rising floor, 4 blackouts, 5 your own shadow); hp is plugs per phase.
 SL.BOSSES = {
   25: { phases: 2, perPhase: 3, speed: 1, name: 'The Game (Preview Build)' },
   50: { phases: 3, perPhase: 3, speed: 1.05, name: 'The Game (Beta)' },
   75: { phases: 4, perPhase: 3, speed: 1.1, name: 'The Game (Release Candidate)' },
-  100: { phases: 4, perPhase: 4, speed: 1.18, name: 'The Game', final: true }
+  100: { phases: 5, perPhase: 3, speed: 1.18, name: 'The Game', final: true }
 };
 SL.BOSS_LIVES = 3;
 SL.isBossLevel = lv => !!SL.BOSSES[lv];

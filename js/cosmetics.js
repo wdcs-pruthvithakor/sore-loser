@@ -130,8 +130,11 @@ SL.PACTS = [
   { id: 'shadow', name: 'Shadowed', desc: 'Copycat is always on.', mult: 0.5 },
   { id: 'wall', name: 'Chased', desc: 'Spike Wall is always on.', mult: 0.5 },
   { id: 'dark', name: 'Blackout', desc: 'Every level has the lights out.', mult: 0.5 },
-  { id: 'greedy', name: 'Butterfingers', desc: 'Dying drops the coins you grabbed this level.', mult: 0.25 }
+  { id: 'greedy', name: 'Butterfingers', desc: 'Dying drops the coins you grabbed this level.', mult: 0.25 },
+  // boss-only: no lives, no phase saves. It multiplies the boss payout instead of joining the pact sum.
+  { id: 'sudden', name: 'Sudden Death', desc: 'Bosses only. No lives: any death in a boss fight heals it fully and sends you back to the door. Boss reward ×5 for 2 phases, ×10 for 3, ×20 for 4, ×40 for the 5-phase final boss.', mult: 0, bossOnly: true }
 ];
+SL.suddenMult = phases => 5 * Math.pow(2, Math.max(0, phases - 2));
 SL.pactMult = pacts => 1 + SL.PACTS.filter(p => pacts && pacts[p.id]).reduce((a, p) => a + p.mult, 0);
 
 // ---------- cheat mastery ----------
@@ -169,6 +172,7 @@ SL.payout = function (level, deaths, coins, diff, twist, extra) {
   if (m !== 1) mults.push([`${SL.DIFFS[diff].name} ×${m}`, m]);
   const pm = SL.pactMult(extra.pacts);
   if (pm !== 1) mults.push([`Pacts ×${pm}`, pm]);
+  if (extra.sudden) mults.push([`Sudden Death ×${extra.sudden}`, extra.sudden]);
   if (extra.ng) mults.push([`New Game+${extra.ng} ×${1 + extra.ng * 0.5}`, 1 + extra.ng * 0.5]);
   for (const [name, f] of mults) { const add = Math.round(total * (f - 1)); rows.push([name, add]); total += add; }
   if (extra.assisted) { const cut = Math.round(total / 2); rows.push(['Assisted (half pay)', -cut]); total -= cut; }

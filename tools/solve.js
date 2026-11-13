@@ -142,7 +142,9 @@ function solveBoss(ctx, L, opts) {
           const tg = bs.plug || (!bs.started ? { x: L.arena.x0 + 3 * T, y: L.arena.floor } : null);
           // a started fight always outranks loitering at the door
           const score = (bs.started ? 1e5 : 0) + (tg ? -(Math.abs(p.x + SL.PW / 2 - tg.x) + 2.2 * Math.abs(p.y + SL.PH - tg.y)) : -Math.abs(p.y + SL.PH - 8 * T));
-          const key = [Math.floor(p.x / 6), Math.floor(p.y / 6), Math.round(p.vx / 60), Math.round(p.vy / 120), a.j > 0 ? 1 : 0, bs.plug ? 1 : 0].join(',');
+          // phase 5's shadow depends on your recent path, so it is part of the state
+          const key = [Math.floor(p.x / 6), Math.floor(p.y / 6), Math.round(p.vx / 60), Math.round(p.vy / 120), a.j > 0 ? 1 : 0, bs.plug ? 1 : 0,
+            bs.shadow ? Math.floor(bs.shadow.x / 12) + ':' + Math.floor(bs.shadow.y / 12) : ''].join(',');
           if (seen.has(key)) continue;
           seen.add(key);
           kids.push({ s: snap(ctx, w), held: a.j > 0 ? 1 : 0, score, cell: Math.floor(p.x / T) * 100 + Math.floor(p.y / T) });
